@@ -22,20 +22,21 @@ import httpx
 
 from labmon.collector.acquisition import Acquisition
 from labmon.collector.config import CollectorConfig, load_config
-from labmon.collector.outbox import Outbox
+from labmon.collector.outbox import Outbox, OutboxError
 from labmon.collector.uploader import Heartbeat, Uploader
 from labmon.sim.clock import SystemClock, VirtualClock
 
 log = logging.getLogger("labmon.collector")
 
 
-def open_outbox(cfg: CollectorConfig) -> Outbox:
+def open_outbox(cfg: CollectorConfig, read_only: bool = False) -> Outbox:
     return Outbox(
         cfg.spool_path,
         cfg.collector_id,
         capacity=cfg.spool_capacity,
         diagnostic_reserve=cfg.diagnostic_reserve,
         journal_mode=cfg.journal_mode,
+        read_only=read_only,
     )
 
 
@@ -119,7 +120,11 @@ def cmd_run(cfg: CollectorConfig) -> int:
 
 
 def cmd_status(cfg: CollectorConfig, as_json: bool) -> int:
-    outbox = open_outbox(cfg)
+    try:
+        outbox = open_outbox(cfg, read_only=True)
+    except OutboxError as exc:
+        print(f"labmon-collector: {exc}", file=sys.stderr)
+        return 3
     try:
         c = outbox.counts()
     finally:
@@ -178,7 +183,7 @@ def cmd_backfill(cfg: CollectorConfig, hours: float) -> int:
 
 
 def cmd_quarantine(cfg: CollectorConfig) -> int:
-    outbox = open_outbox(cfg)
+    outbox = open_outbox(cfg, read_only=True)
     try:
         print(json.dumps(outbox.quarantined(), indent=2))
     finally:

@@ -105,6 +105,8 @@ class Stack:
             stdout=self._log("collector"),
             stderr=subprocess.STDOUT,
         )
+        spool = self.workdir / "spool.sqlite3"
+        wait_for(spool.exists, 15, "collector spool created")
 
     def stop_collector(self, sig: int = signal.SIGTERM) -> None:
         assert self.collector is not None
@@ -118,8 +120,10 @@ class Stack:
             env=self._env(),
             capture_output=True,
             text=True,
-            check=True,
+            check=False,
         )
+        if out.returncode != 0:
+            raise AssertionError(f"collector status failed: {out.stderr[-2000:]}")
         return json.loads(out.stdout)  # type: ignore[no-any-return]
 
     def close(self) -> None:

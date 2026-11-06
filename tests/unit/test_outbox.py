@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -234,3 +235,24 @@ def test_append_cost_does_not_grow_with_backlog(spool: Path) -> None:
         ob.append_many(batch)
     late = timed(20)
     assert late < early * 3 + 0.05
+
+
+def test_spool_has_a_single_owner_and_read_only_inspection(spool: Path) -> None:
+    owner = Outbox(spool, "col-1")
+    owner.append(lambda e, s: sample(e, s))
+    with pytest.raises(OutboxError, match="owned by another process"):
+        Outbox(spool, "col-1")  # e.g. playback while the collector runs
+    viewer = Outbox(spool, "col-1", read_only=True)  # `labmon-collector status`
+    assert viewer.counts().pending == 1
+    with pytest.raises(sqlite3.OperationalError):
+        viewer.append(lambda e, s: sample(e, s))
+    viewer.close()
+    owner.close()
+    again = Outbox(spool, "col-1")  # released on close (and by the OS if the process dies)
+    assert again.counts().pending == 1
+    again.close()
+
+
+def test_read_only_needs_an_existing_spool(tmp_path: Path) -> None:
+    with pytest.raises(OutboxError, match="no spool"):
+        Outbox(tmp_path / "missing.sqlite3", "col-1", read_only=True)

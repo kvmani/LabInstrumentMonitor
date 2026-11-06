@@ -17,7 +17,9 @@ One connection, serialised by a lock, performs all spool I/O.
 
 from __future__ import annotations
 
+import os
 import sqlite3
+import sys
 import threading
 import uuid
 from collections.abc import Callable, Iterator
@@ -78,6 +80,47 @@ CREATE TABLE IF NOT EXISTS batch (
   receipt_id INTEGER
 );
 """
+
+
+class SpoolLock:
+    """Exclusive, non-blocking ownership of a spool by one process (POSIX flock / Windows
+    msvcrt). The OS releases it if the process dies, so a crashed collector never blocks the
+    next start; a second live owner (e.g. playback while the collector runs) is refused."""
+
+    def __init__(self, spool: Path) -> None:
+        self.path = spool.with_name(spool.name + ".lock")
+        self._fh: Any = None
+
+    def acquire(self) -> None:
+        fh = self.path.open("a+")
+        try:
+            if sys.platform == "win32":  # pragma: no cover - exercised on the Windows edge
+                import msvcrt
+
+                fh.seek(0)
+                msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            fh.seek(0)
+            owner = fh.read().strip() or "unknown"
+            fh.close()
+            raise OutboxError(
+                f"spool {self.path.with_suffix('')} is owned by another process (pid {owner}); "
+                "stop it first or use `labmon-collector status` (read-only)"
+            ) from exc
+        fh.seek(0)
+        fh.truncate()
+        fh.write(str(os.getpid()))
+        fh.flush()
+        self._fh = fh
+
+    def release(self) -> None:
+        if self._fh is not None:
+            self._fh.close()  # closing the descriptor releases the OS lock
+            self._fh = None
 
 
 class SpoolFull(Exception):
@@ -161,6 +204,7 @@ class Outbox:
         journal_mode: str = "auto",
         min_epoch: int = 1,
         now: Callable[[], datetime] = lambda: datetime.now(UTC),
+        read_only: bool = False,
     ) -> None:
         if capacity <= diagnostic_reserve:
             raise ValueError("capacity must exceed the diagnostic reserve")
@@ -169,7 +213,29 @@ class Outbox:
         self.diagnostic_reserve = diagnostic_reserve
         self._now = now
         self._lock = threading.RLock()
+        self.read_only = read_only
+        self._owner: SpoolLock | None = None
+        if read_only:
+            # inspection while the collector runs: no lock, no schema changes, no writes
+            if not self.path.exists():
+                raise OutboxError(f"no spool at {self.path}")
+            self._conn = sqlite3.connect(
+                f"file:{self.path}?mode=ro",
+                uri=True,
+                isolation_level=None,
+                check_same_thread=False,
+                timeout=30.0,
+            )
+            self.journal_mode = str(self._conn.execute("PRAGMA journal_mode").fetchone()[0])
+            existing = self._meta("collector_id")
+            if existing != collector_id:
+                raise OutboxError(f"spool belongs to collector {existing!r}, not {collector_id!r}")
+            self.collector_id = collector_id
+            self.new_epoch_created = False
+            return
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._owner = SpoolLock(self.path)
+        self._owner.acquire()
         self._conn = sqlite3.connect(
             str(self.path), isolation_level=None, check_same_thread=False, timeout=30.0
         )
@@ -242,6 +308,9 @@ class Outbox:
     def close(self) -> None:
         with self._lock:
             self._conn.close()
+            if self._owner is not None:
+                self._owner.release()
+                self._owner = None
 
     @property
     def epoch(self) -> int:

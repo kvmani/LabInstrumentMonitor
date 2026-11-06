@@ -58,7 +58,7 @@ when `LABMON_ENV=production`.
 ## Rehearsal history (playback)
 
 ```bash
-# stop the live collector first: one process owns the spool
+# stop the live collector first: one process owns the spool (enforced by an OS lock)
 .venv/bin/labmon-collector backfill --config .devdata/collector/collector.toml --hours 3
 .venv/bin/labmon-collector run --config .devdata/collector/collector.toml   # uploads the backlog
 ```
