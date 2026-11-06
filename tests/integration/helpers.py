@@ -64,8 +64,10 @@ def settings_for(url: str) -> Settings:
     return Settings(database_url=url, environment="test", static_dir=None, cookie_secure=False)
 
 
-def client_for(world: World, url: str, now, after_commit=None) -> TestClient:  # type: ignore[no-untyped-def]
-    app = create_app(settings_for(url), engine=world.engine, now=now, after_commit=after_commit)
+def client_for(world: World, url: str, now, after_commit=None, settings=None) -> TestClient:  # type: ignore[no-untyped-def]
+    app = create_app(
+        settings or settings_for(url), engine=world.engine, now=now, after_commit=after_commit
+    )
     return TestClient(app, raise_server_exceptions=os.environ.get("LABMON_TEST_RAISE") == "1")
 
 

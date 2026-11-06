@@ -22,7 +22,9 @@ def main(argv: list[str] | None = None) -> int:
     serve = sub.add_parser("serve", help="run the API with uvicorn")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
-    worker = sub.add_parser("rollup-worker", help="maintain minute rollups (separate process)")
+    worker = sub.add_parser(
+        "worker", aliases=["rollup-worker"], help="rollups and durable exports (separate process)"
+    )
     worker.add_argument("--once", action="store_true", help="drain the queue once and exit")
     worker.add_argument("--interval", type=float, default=2.0)
     fixture = sub.add_parser("load-fixture", help="development/test only: load a long fixture")
@@ -69,12 +71,12 @@ def main(argv: list[str] | None = None) -> int:
         chans = tuple(args.channels.split(",")) if args.channels else None
         print(load_fixture(make_engine(settings.database_url, pool_size=2), args.key, chans))
         return 0
-    if args.command == "rollup-worker":
+    if args.command in ("worker", "rollup-worker"):
         from labmon.server.db import make_engine
         from labmon.server.worker import run_rollup_worker
 
         return run_rollup_worker(
-            make_engine(settings.database_url, pool_size=2), args.once, args.interval
+            make_engine(settings.database_url, pool_size=2), args.once, args.interval, settings
         )
     if args.command == "bootstrap-dev":
         if not settings.dev_tools_allowed:

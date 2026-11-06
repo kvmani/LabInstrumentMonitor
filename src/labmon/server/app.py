@@ -33,6 +33,15 @@ from labmon.contracts.envelope import (
 from labmon.server import analysis, migrate
 from labmon.server.analysis import load_frames
 from labmon.server.db import make_engine
+from labmon.server.exports import (
+    ExportError,
+    ExportRequest,
+    create_job,
+    export_path,
+    get_job_for,
+    job_view,
+    list_jobs,
+)
 from labmon.server.ingest import (
     IngestError,
     IngestLimits,
@@ -472,6 +481,66 @@ def create_app(
     )
     def retract(annotation_id: int, body: Retract, p: User) -> dict[str, Any]:
         return _records(lambda c: retract_annotation(c, p, annotation_id, body, now()))
+
+    # --- durable exports (EXP-01) -------------------------------------------------------------
+
+    def _exports(fn: Callable[[Any], Any]) -> Any:
+        try:
+            with engine.begin() as conn:
+                return fn(conn)
+        except ExportError as exc:
+            raise HTTPException(exc.status, exc.message) from exc
+
+    @app.post(
+        "/api/v1/instruments/{instrument_id}/exports",
+        status_code=202,
+        dependencies=[Depends(require_same_origin)],
+    )
+    def post_export(instrument_id: str, body: ExportRequest, p: User) -> dict[str, Any]:
+        return _exports(lambda c: create_job(c, p, instrument_id, body, now(), settings))  # type: ignore[no-any-return]
+
+    @app.get("/api/v1/exports")
+    def get_exports(
+        p: User, instrument_id: Annotated[str | None, Query(max_length=64)] = None
+    ) -> dict[str, Any]:
+        with engine.connect() as conn:
+            return {"items": list_jobs(conn, p, instrument_id)}
+
+    @app.get("/api/v1/exports/{job_id}")
+    def get_export(job_id: str, p: User) -> dict[str, Any]:
+        return _exports(lambda c: job_view(get_job_for(c, p, job_id)))  # type: ignore[no-any-return]
+
+    @app.get("/api/v1/exports/{job_id}/download")
+    def download_export(job_id: str, p: User) -> FileResponse:
+        at = now()
+
+        def check(c: Any) -> Any:
+            j = get_job_for(c, p, job_id)
+            if j.status == "expired" or (j.expires_at is not None and j.expires_at < at):
+                raise ExportError(410, "export expired; request a new one")
+            if j.status != "succeeded":
+                raise ExportError(409, f"export is {j.status}")
+            audit(
+                c,
+                at,
+                "user",
+                str(p.user_id),
+                "export_downloaded",
+                j.instrument_id,
+                {"export_id": j.id, "sha256": j.sha256},
+            )
+            return j
+
+        j = _exports(check)
+        path = export_path(settings, j.id)
+        if not path.is_file():
+            raise HTTPException(410, "export file is no longer available")
+        return FileResponse(
+            path,
+            media_type="application/zip",
+            filename=j.file_name,
+            headers={"X-Content-SHA256": j.sha256 or ""},
+        )
 
     @app.get("/api/v1/runs/{run_id}")
     def get_run(run_id: str, p: User) -> dict[str, Any]:

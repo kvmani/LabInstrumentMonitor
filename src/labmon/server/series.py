@@ -396,78 +396,92 @@ def count_rows(conn: Connection, instrument_id: str, start: datetime, end: datet
     )
 
 
+def iter_sample_records(
+    conn: Connection,
+    instrument_id: str,
+    start: datetime,
+    end: datetime,
+    channel_ids: list[str] | None = None,
+) -> Iterator[tuple[list[Any], Any]]:
+    """Yield ``(csv_row, sample)`` in time-then-identity order from the caller's snapshot.
+
+    One implementation shared by the interactive CSV and durable exports.
+    """
+    channels = {
+        c.id: c for c in conn.execute(select(Channel).where(Channel.instrument_id == instrument_id))
+    }
+    q = select(Sample).where(
+        Sample.instrument_id == instrument_id, Sample.event_time >= start, Sample.event_time < end
+    )
+    if channel_ids:
+        q = q.where(Sample.channel_id.in_(channel_ids))
+    result = conn.execution_options(stream_results=True, yield_per=2000).execute(
+        q.order_by(
+            Sample.event_time,
+            Sample.channel_id,
+            Sample.collector_id,
+            Sample.spool_epoch,
+            Sample.seq,
+        )
+    )
+    for s in result:
+        ch = channels[s.channel_id]
+        value: Any = {"float": s.value_num, "enum": s.value_int}.get(ch.data_type, s.value_bool)
+        label = (
+            (ch.enum_labels or {}).get(str(value), "")
+            if ch.data_type == "enum" and value is not None
+            else ""
+        )
+        yield (
+            [
+                format_utc(s.event_time),
+                s.event_time_source,
+                s.instrument_id,
+                s.channel_id,
+                ch.key,
+                ch.quantity,
+                ch.unit,
+                "" if value is None else value,
+                safe_text(label),
+                s.quality,
+                s.quality_reason or "",
+                s.clock_confidence,
+                s.clock_flag or "",
+                format_utc(s.capture_time),
+                "" if s.source_time is None else format_utc(s.source_time),
+                s.source_time_meaning,
+                format_utc(s.receive_time),
+                safe_text(s.raw),
+                safe_text(s.source_status),
+                s.collector_id,
+                s.spool_epoch,
+                s.seq,
+                safe_text(s.frame_id),
+                s.profile_revision_id,
+                "true" if s.simulated else "false",
+            ],
+            s,
+        )
+
+
 def csv_rows(engine: Engine, instrument_id: str, start: datetime, end: datetime) -> Iterator[str]:
     """Stream raw rows in a single REPEATABLE READ snapshot, ordered by time then identity."""
     buf = io.StringIO()
     writer = csv.writer(buf, lineterminator="\n")
     writer.writerow(CSV_COLUMNS)
     yield buf.getvalue()
+    buf.seek(0)
+    buf.truncate()
     with engine.connect().execution_options(
-        isolation_level="REPEATABLE READ",
-        postgresql_readonly=True,
-        stream_results=True,
-        yield_per=2000,
+        isolation_level="REPEATABLE READ", postgresql_readonly=True
     ) as conn:
-        channels = {
-            c.id: c
-            for c in conn.execute(select(Channel).where(Channel.instrument_id == instrument_id))
-        }
-        result = conn.execute(
-            select(Sample)
-            .where(
-                Sample.instrument_id == instrument_id,
-                Sample.event_time >= start,
-                Sample.event_time < end,
-            )
-            .order_by(
-                Sample.event_time,
-                Sample.channel_id,
-                Sample.collector_id,
-                Sample.spool_epoch,
-                Sample.seq,
-            )
-        )
-        for part in result.partitions():
-            buf.seek(0)
-            buf.truncate()
-            for row in part:
-                s = row
-                ch = channels[s.channel_id]
-                value: Any = {"float": s.value_num, "enum": s.value_int}.get(
-                    ch.data_type, s.value_bool
-                )
-                label = (
-                    (ch.enum_labels or {}).get(str(value), "")
-                    if ch.data_type == "enum" and value is not None
-                    else ""
-                )
-                writer.writerow(
-                    [
-                        format_utc(s.event_time),
-                        s.event_time_source,
-                        s.instrument_id,
-                        s.channel_id,
-                        ch.key,
-                        ch.quantity,
-                        ch.unit,
-                        "" if value is None else value,
-                        safe_text(label),
-                        s.quality,
-                        s.quality_reason or "",
-                        s.clock_confidence,
-                        s.clock_flag or "",
-                        format_utc(s.capture_time),
-                        "" if s.source_time is None else format_utc(s.source_time),
-                        s.source_time_meaning,
-                        format_utc(s.receive_time),
-                        safe_text(s.raw),
-                        safe_text(s.source_status),
-                        s.collector_id,
-                        s.spool_epoch,
-                        s.seq,
-                        safe_text(s.frame_id),
-                        s.profile_revision_id,
-                        "true" if s.simulated else "false",
-                    ]
-                )
-            yield buf.getvalue()
+        pending = 0
+        for row, _ in iter_sample_records(conn, instrument_id, start, end):
+            writer.writerow(row)
+            pending += 1
+            if pending >= 2000:
+                yield buf.getvalue()
+                buf.seek(0)
+                buf.truncate()
+                pending = 0
+        yield buf.getvalue()

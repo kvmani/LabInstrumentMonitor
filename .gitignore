@@ -13,3 +13,4 @@ playwright-report/
 *.sqlite3-*
 *.token
 web/*.tsbuildinfo
+var/

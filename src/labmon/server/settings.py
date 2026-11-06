@@ -29,6 +29,11 @@ class Settings:
     raw_point_limit: int = 5_000
     max_buckets: int = 1_200
     csv_row_limit: int = 500_000
+    export_dir: Path = field(default_factory=lambda: Path("var/exports"))
+    export_row_limit: int = 10_000_000
+    export_retention_days: float = 7.0
+    export_max_attempts: int = 3
+    export_lease_s: float = 300.0
     login_attempts_per_15min: int = 5
 
     @property
@@ -52,4 +57,5 @@ class Settings:
             cookie_secure=os.environ.get("LABMON_COOKIE_SECURE", secure_default).lower() in _TRUE,
             session_ttl_hours=float(os.environ.get("LABMON_SESSION_TTL_HOURS", "12")),
             display_timezone=os.environ.get("LABMON_DISPLAY_TZ", "Asia/Kolkata"),
+            export_dir=Path(os.environ.get("LABMON_EXPORT_DIR", "var/exports")),
         )

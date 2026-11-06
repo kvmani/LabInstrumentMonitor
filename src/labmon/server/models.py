@@ -378,3 +378,34 @@ class Annotation(Base):
     retracted_at: Mapped[datetime | None] = mapped_column(TS)
     retracted_by: Mapped[int | None] = mapped_column(ForeignKey("app_user.id"))
     retract_reason: Mapped[str | None] = mapped_column(Text)
+
+
+class ExportJob(Base):
+    """A durable, leased export job. Files are published atomically; access is re-checked at
+    download time; files expire."""
+
+    __tablename__ = "export_job"
+    __table_args__ = (
+        Index("ix_export_job_status_created", "status", "created_at"),
+        CheckConstraint(
+            "status IN ('queued','running','succeeded','failed','expired')", name="status"
+        ),
+    )
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("app_user.id"))
+    instrument_id: Mapped[str] = mapped_column(ForeignKey("instrument.id"))
+    params: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    status: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(TS)
+    attempts: Mapped[int] = mapped_column(Integer, server_default="0")
+    lease_owner: Mapped[str | None] = mapped_column(Text)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(TS)
+    started_at: Mapped[datetime | None] = mapped_column(TS)
+    finished_at: Mapped[datetime | None] = mapped_column(TS)
+    error: Mapped[str | None] = mapped_column(Text)
+    file_name: Mapped[str | None] = mapped_column(Text)
+    byte_size: Mapped[int | None] = mapped_column(BigInteger)
+    sha256: Mapped[str | None] = mapped_column(Text)
+    row_count: Mapped[int | None] = mapped_column(BigInteger)
+    manifest: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    expires_at: Mapped[datetime | None] = mapped_column(TS)
