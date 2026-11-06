@@ -33,7 +33,12 @@ function fmt(tz: string, withDate: boolean, ms: boolean): Intl.DateTimeFormat {
   return f;
 }
 
-export function formatTime(iso: string | number | Date, tz: string, withDate = true, ms = false): string {
+export function formatTime(
+  iso: string | number | Date,
+  tz: string,
+  withDate = true,
+  ms = false,
+): string {
   const d = iso instanceof Date ? iso : new Date(iso);
   return fmt(tz, withDate, ms).format(d);
 }
@@ -81,7 +86,13 @@ export function fromLocalInput(value: string, tz: string): number {
   for (let i = 0; i < 2; i++) {
     const shown = toLocalInput(ts, tz);
     const sm = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(shown)!;
-    const [sy, smo, sd, sh, smi] = sm.slice(1).map(Number) as [number, number, number, number, number];
+    const [sy, smo, sd, sh, smi] = sm.slice(1).map(Number) as [
+      number,
+      number,
+      number,
+      number,
+      number,
+    ];
     ts += guess - Date.UTC(sy, smo - 1, sd, sh, smi);
   }
   return ts;

@@ -15,8 +15,8 @@ step "mypy --strict"
 "$PY/mypy"
 step "pytest unit + integration (real PostgreSQL 16)"
 "$PY/pytest" -q tests/unit tests/integration
-step "web: typecheck + build"
-(cd web && npm run --silent typecheck && npm run --silent build >/dev/null)
+step "web: prettier, typecheck, build"
+(cd web && npm run --silent format:check && npm run --silent typecheck && npm run --silent build >/dev/null)
 for arg in "$@"; do
   case "$arg" in
     --e2e) step "pytest e2e (real processes + Chromium)"; "$PY/pytest" -q tests/e2e ;;

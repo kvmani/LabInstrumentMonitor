@@ -67,6 +67,8 @@ fix the cause or record the open defect in `TASK_PROGRESS.md`.
   buttons, links and inputs with accessible names. Respect reduced motion.
 - Polling is bounded, aborts on input change, backs off on errors and slows for hidden tabs.
 - Colours come from CSS tokens in `styles.css` (light and dark); no inline hex values in components.
+- Format with Prettier (`npm run format`, pinned in `web/package.json`, width 100); the gate runs
+  `npm run format:check`.
 
 ## Data, acquisition and ingest invariants
 

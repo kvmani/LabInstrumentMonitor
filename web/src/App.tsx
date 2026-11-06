@@ -22,9 +22,7 @@ function useHashRoute(): string {
 /** Applies the theme preference and returns the effective theme (charts re-render on change). */
 function useTheme(pref: ThemePref): string {
   const [system, setSystem] = useState(() =>
-    window.matchMedia?.("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light",
+    window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light",
   );
   useEffect(() => {
     const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
@@ -41,14 +39,9 @@ function useTheme(pref: ThemePref): string {
 }
 
 export function App() {
-  const [session, setSession] = useState<SessionInfo | null | undefined>(
-    undefined,
-  );
+  const [session, setSession] = useState<SessionInfo | null | undefined>(undefined);
   const [zone, setZone] = useStoredState<Zone>("labmon.zone", "local");
-  const [themePref, setThemePref] = useStoredState<ThemePref>(
-    "labmon.theme",
-    "system",
-  );
+  const [themePref, setThemePref] = useStoredState<ThemePref>("labmon.theme", "system");
   const theme = useTheme(themePref);
   const online = useOnline();
   const route = useHashRoute();
@@ -97,10 +90,7 @@ export function App() {
           </span>
           Lab Instrument Monitor
         </a>
-        <span
-          className="badge sim"
-          title="This installation only has simulated instruments"
-        >
+        <span className="badge sim" title="This installation only has simulated instruments">
           Simulator-only release
         </span>
         <div className="topnav">
@@ -110,18 +100,10 @@ export function App() {
         </div>
         <span className="spacer" />
         <div className="segmented" role="group" aria-label="Time zone">
-          <button
-            type="button"
-            aria-pressed={zone === "local"}
-            onClick={() => setZone("local")}
-          >
+          <button type="button" aria-pressed={zone === "local"} onClick={() => setZone("local")}>
             {zoneLabel("local", displayTz)}
           </button>
-          <button
-            type="button"
-            aria-pressed={zone === "UTC"}
-            onClick={() => setZone("UTC")}
-          >
+          <button type="button" aria-pressed={zone === "UTC"} onClick={() => setZone("UTC")}>
             UTC
           </button>
         </div>
@@ -131,12 +113,7 @@ export function App() {
           aria-label={`Theme: ${themePref}. Switch to ${nextTheme[themePref]}`}
           title={`Theme: ${themePref}`}
         >
-          Theme:{" "}
-          {themePref === "system"
-            ? "Auto"
-            : themePref === "light"
-              ? "Light"
-              : "Dark"}
+          Theme: {themePref === "system" ? "Auto" : themePref === "light" ? "Light" : "Dark"}
         </button>
         <span className="user">{session.display_name}</span>
         <button type="button" onClick={signOut}>

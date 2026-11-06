@@ -7,10 +7,7 @@ import { cssVar } from "./TimePanels";
 
 type P = [number, number, string, number | string];
 
-const GROUPS: Record<
-  string,
-  { key: string | number; label: string; color: string }[]
-> = {
+const GROUPS: Record<string, { key: string | number; label: string; color: string }[]> = {
   tensile: [
     { key: "load", label: "Loading", color: "--series-1" },
     { key: "fracture", label: "Fracture", color: "--bad" },
@@ -55,13 +52,7 @@ export function XYChart(props: {
     const gridLine = cssVar("--grid");
     const groups = GROUPS[analysis.kind] ?? [];
     const keyOf = (p: P | null): string | number | null =>
-      p === null
-        ? null
-        : analysis.kind === "tensile"
-          ? p[3] === 3
-            ? "fracture"
-            : "load"
-          : p[3];
+      p === null ? null : analysis.kind === "tensile" ? (p[3] === 3 ? "fracture" : "load") : p[3];
     const pts = analysis.points as (P | null)[];
     // One series per segment kind, in acquisition order. Points of other segments become breaks;
     // each segment also takes the point just before it so the trace stays continuous.

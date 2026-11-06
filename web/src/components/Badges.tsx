@@ -4,10 +4,7 @@ import type { AcquisitionState } from "../types";
 export function SimBadge({ simulated }: { simulated: boolean }) {
   if (!simulated) return null;
   return (
-    <span
-      className="badge sim"
-      title="Synthetic data from the simulator, not a real instrument"
-    >
+    <span className="badge sim" title="Synthetic data from the simulator, not a real instrument">
       ◇ SIMULATED
     </span>
   );

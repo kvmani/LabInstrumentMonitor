@@ -190,6 +190,20 @@ def test_dashboard_workspace_csv_and_failure_states(running: Stack, tmp_path: Pa
         wait_for(lambda: "corrected (rev 2)" in notes.inner_text(), 10, "annotation corrected")
         shot(page, "furnace-annotations-1366x768")
 
+        # saved personal view: store the current range and axes, then re-apply it
+        views = page.get_by_test_id("views")
+        views.get_by_role("button", name="Save view…").click()
+        views.get_by_label("View name").fill("rehearsal 1 h")
+        views.get_by_role("button", name="Save", exact=True).click()
+        wait_for(
+            lambda: "rehearsal 1 h" in views.get_by_label("Saved views").inner_text(),
+            10,
+            "saved view listed",
+        )
+        page.get_by_role("button", name="24 h", exact=True).click()
+        views.get_by_label("Saved views").select_option(label="rehearsal 1 h")
+        wait_for(lambda: "Live" in page.get_by_test_id("live-state").inner_text(), 5, "applied")
+
         # durable export: queued, built by the worker process, downloaded with a manifest
         page.get_by_test_id("request-export").click()
         link = page.get_by_test_id("export-download").first

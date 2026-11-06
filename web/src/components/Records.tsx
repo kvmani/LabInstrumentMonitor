@@ -3,11 +3,7 @@ import { api, ApiError } from "../api";
 import { formatTime, fromLocalInput, isoUtc, toLocalInput } from "../time";
 import type { AnnotationView, RunView } from "../types";
 
-export const RECORD_ROLES = new Set([
-  "scientist",
-  "custodian",
-  "administrator",
-]);
+export const RECORD_ROLES = new Set(["scientist", "custodian", "administrator"]);
 
 function errorText(e: unknown): string {
   return e instanceof ApiError ? e.message : "Cannot reach the monitor service";
@@ -64,14 +60,11 @@ export function AnnotationPanel(props: {
   const add = async (e: React.FormEvent) => {
     e.preventDefault();
     const ok = await run(() =>
-      api.post(
-        `/api/v1/instruments/${encodeURIComponent(instrumentId)}/annotations`,
-        {
-          at: toIso(form.at, tz),
-          end_at: toIso(form.end, tz),
-          text: form.text,
-        },
-      ),
+      api.post(`/api/v1/instruments/${encodeURIComponent(instrumentId)}/annotations`, {
+        at: toIso(form.at, tz),
+        end_at: toIso(form.end, tz),
+        text: form.text,
+      }),
     );
     if (ok) {
       setAdding(false);
@@ -96,11 +89,7 @@ export function AnnotationPanel(props: {
   };
 
   return (
-    <section
-      className="card card-pad"
-      aria-labelledby="ann-title"
-      data-testid="annotations"
-    >
+    <section className="card card-pad" aria-labelledby="ann-title" data-testid="annotations">
       <div className="toolbar">
         <h2 id="ann-title">Annotations in this range</h2>
         <span className="sub">
@@ -176,10 +165,7 @@ export function AnnotationPanel(props: {
                 {a.revision > 1 ? ` · corrected (rev ${a.revision})` : ""}
               </span>
               {canRecord && (
-                <span
-                  className="row"
-                  style={{ display: "inline-flex", marginLeft: 8 }}
-                >
+                <span className="row" style={{ display: "inline-flex", marginLeft: 8 }}>
                   <button
                     type="button"
                     className="btn-ghost"
@@ -214,11 +200,7 @@ export function AnnotationPanel(props: {
                 <form
                   className="toolbar"
                   onSubmit={saveEdit}
-                  aria-label={
-                    editing.mode === "edit"
-                      ? "Correct annotation"
-                      : "Retract annotation"
-                  }
+                  aria-label={editing.mode === "edit" ? "Correct annotation" : "Retract annotation"}
                 >
                   {editing.mode === "edit" && (
                     <input
@@ -227,9 +209,7 @@ export function AnnotationPanel(props: {
                       maxLength={1000}
                       aria-label="Corrected text"
                       value={editing.text}
-                      onChange={(e) =>
-                        setEditing({ ...editing, text: e.target.value })
-                      }
+                      onChange={(e) => setEditing({ ...editing, text: e.target.value })}
                     />
                   )}
                   <input
@@ -240,9 +220,7 @@ export function AnnotationPanel(props: {
                     aria-label="Reason (recorded in the audit log)"
                     placeholder="Reason (recorded in the audit log)"
                     value={editing.reason}
-                    onChange={(e) =>
-                      setEditing({ ...editing, reason: e.target.value })
-                    }
+                    onChange={(e) => setEditing({ ...editing, reason: e.target.value })}
                   />
                   <button type="submit" className="btn-primary" disabled={busy}>
                     {editing.mode === "edit" ? "Save correction" : "Retract"}
@@ -314,8 +292,7 @@ export function NewRunForm({
     >
       <h2>New run record</h2>
       <p className="sub">
-        A run is a record of an experiment window. It does not start or stop the
-        instrument.
+        A run is a record of an experiment window. It does not start or stop the instrument.
       </p>
       <label>
         Name{" "}
@@ -457,10 +434,7 @@ export function RunEditForm({
       )}
       <label>
         Tags{" "}
-        <input
-          value={form.tags}
-          onChange={(e) => setForm({ ...form, tags: e.target.value })}
-        />
+        <input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} />
       </label>
       <label>
         Reason (recorded in the audit log){" "}

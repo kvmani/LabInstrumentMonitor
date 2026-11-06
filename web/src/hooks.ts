@@ -61,7 +61,12 @@ export function usePolling<T>(
       } catch (err) {
         if (cancelled || mine.signal.aborted) return;
         failures.current += 1;
-        setState((s) => ({ ...s, error: err as Error, loading: false, failures: failures.current }));
+        setState((s) => ({
+          ...s,
+          error: err as Error,
+          loading: false,
+          failures: failures.current,
+        }));
       }
       schedule();
     };

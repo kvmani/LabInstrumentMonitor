@@ -409,3 +409,21 @@ class ExportJob(Base):
     row_count: Mapped[int | None] = mapped_column(BigInteger)
     manifest: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     expires_at: Mapped[datetime | None] = mapped_column(TS)
+
+
+class SavedView(Base):
+    """A saved chart view for one instrument: personal, or a lab template shared explicitly."""
+
+    __tablename__ = "saved_view"
+    __table_args__ = (
+        Index("ix_saved_view_instrument", "instrument_id"),
+        CheckConstraint("scope IN ('personal','lab')", name="scope"),
+    )
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    instrument_id: Mapped[str] = mapped_column(ForeignKey("instrument.id"))
+    owner_id: Mapped[int] = mapped_column(ForeignKey("app_user.id"))
+    scope: Mapped[str] = mapped_column(Text)
+    name: Mapped[str] = mapped_column(Text)
+    config: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(TS)
+    deleted_at: Mapped[datetime | None] = mapped_column(TS)

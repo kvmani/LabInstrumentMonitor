@@ -24,4 +24,4 @@ connected staging host, verify hashes, transfer, and install with
 | echarts, zrender (6.1) | Charts | Apache-2.0 | bundled |
 
 Dev-only: pytest (MIT), ruff (MIT), mypy (MIT), playwright (Apache-2.0), vite (MIT),
-typescript (Apache-2.0). An SBOM (CycloneDX) is an M3 release deliverable.
+typescript (Apache-2.0), prettier (MIT). An SBOM (CycloneDX) is an M3 release deliverable.

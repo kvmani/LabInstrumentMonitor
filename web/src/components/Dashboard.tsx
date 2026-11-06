@@ -28,15 +28,7 @@ function matches(s: InstrumentStatus, f: Filter): boolean {
   }
 }
 
-function InstrumentCard({
-  s,
-  tz,
-  drift,
-}: {
-  s: InstrumentStatus;
-  tz: string;
-  drift: number;
-}) {
+function InstrumentCard({ s, tz, drift }: { s: InstrumentStatus; tz: string; drift: number }) {
   const primary = primaryChannel(s);
   const firstPanel = s.display.panels[0];
   const spark = usePolling<Series>(
@@ -52,9 +44,7 @@ function InstrumentCard({
     15000,
     `spark:${primary?.id ?? "none"}`,
   );
-  const secondary = s.channels.filter(
-    (c) => c !== primary && c.role !== "state",
-  );
+  const secondary = s.channels.filter((c) => c !== primary && c.role !== "state");
   const stateCh = s.channels.find((c) => c.role === "state");
   const latest = primary?.latest ?? null;
   const href = `#/instrument/${encodeURIComponent(s.instrument.id)}`;
@@ -84,28 +74,19 @@ function InstrumentCard({
             title={s.faults.map((f) => f.message).join("\n")}
           >
             ▲ {s.faults.filter((f) => f.severity !== "info").length} fault
-            {s.faults.filter((f) => f.severity !== "info").length > 1
-              ? "s"
-              : ""}
+            {s.faults.filter((f) => f.severity !== "info").length > 1 ? "s" : ""}
           </span>
         )}
         {stateCh && (
-          <span
-            className="pill tone-muted"
-            title="From the validated state channel"
-          >
-            {s.process_state.state === "unknown"
-              ? "State unknown"
-              : s.process_state.state}
+          <span className="pill tone-muted" title="From the validated state channel">
+            {s.process_state.state === "unknown" ? "State unknown" : s.process_state.state}
           </span>
         )}
       </div>
       <div>
         <div className="sub">{primary?.name}</div>
         <div className="icard-primary">
-          <span className={`big ${latest?.quality === "bad" ? "error" : ""}`}>
-            {value}
-          </span>
+          <span className={`big ${latest?.quality === "bad" ? "error" : ""}`}>{value}</span>
           {latest?.value !== null && primary?.unit && (
             <span className="big-unit">{primary.unit}</span>
           )}
@@ -114,8 +95,7 @@ function InstrumentCard({
           <div className="secondary">
             {secondary.map((c) => (
               <span key={c.id}>
-                <span className="muted">{c.name}</span>{" "}
-                <b>{formatValue(c, c.latest)}</b>
+                <span className="muted">{c.name}</span> <b>{formatValue(c, c.latest)}</b>
               </span>
             ))}
           </div>
@@ -149,18 +129,12 @@ export function Dashboard({
 }) {
   const poll = usePolling(
     (signal) =>
-      api.get<{ server_time: string; items: InstrumentStatus[] }>(
-        "/api/v1/instruments",
-        signal,
-      ),
+      api.get<{ server_time: string; items: InstrumentStatus[] }>("/api/v1/instruments", signal),
     5000,
     "fleet",
   );
   const now = useNow(1000);
-  const [view, setView] = useStoredState<"cards" | "table">(
-    "labmon.fleetView",
-    "cards",
-  );
+  const [view, setView] = useStoredState<"cards" | "table">("labmon.fleetView", "cards");
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const items = useMemo(() => poll.data?.items ?? [], [poll.data]);
@@ -220,8 +194,7 @@ export function Dashboard({
         <div>
           <h1>Fleet overview</h1>
           <p className="sub">
-            Live acquisition status for every instrument visible to you · times
-            in {tzLabel}
+            Live acquisition status for every instrument visible to you · times in {tzLabel}
           </p>
         </div>
         <span className="spacer" />
@@ -235,18 +208,10 @@ export function Dashboard({
           />
         </label>
         <div className="segmented" role="group" aria-label="Layout">
-          <button
-            type="button"
-            aria-pressed={view === "cards"}
-            onClick={() => setView("cards")}
-          >
+          <button type="button" aria-pressed={view === "cards"} onClick={() => setView("cards")}>
             Cards
           </button>
-          <button
-            type="button"
-            aria-pressed={view === "table"}
-            onClick={() => setView("table")}
-          >
+          <button type="button" aria-pressed={view === "table"} onClick={() => setView("table")}>
             Table
           </button>
         </div>
@@ -298,14 +263,9 @@ export function Dashboard({
                 const ch = primaryChannel(s);
                 const latest = ch?.latest ?? null;
                 return (
-                  <tr
-                    key={s.instrument.id}
-                    data-testid={`fleet-row-${s.instrument.id}`}
-                  >
+                  <tr key={s.instrument.id} data-testid={`fleet-row-${s.instrument.id}`}>
                     <td>
-                      <a
-                        href={`#/instrument/${encodeURIComponent(s.instrument.id)}`}
-                      >
+                      <a href={`#/instrument/${encodeURIComponent(s.instrument.id)}`}>
                         {s.instrument.name}
                       </a>
                       <div className="sub">
@@ -327,9 +287,7 @@ export function Dashboard({
                     <td>
                       {latest ? formatTime(latest.event_time, tz) : "—"}
                       <div className="sub">
-                        {latest
-                          ? formatAge(latest.age_s + drift)
-                          : "no samples"}
+                        {latest ? formatAge(latest.age_s + drift) : "no samples"}
                       </div>
                     </td>
                     <td>
@@ -339,13 +297,7 @@ export function Dashboard({
                         s.process_state.state
                       )}
                     </td>
-                    <td>
-                      {s.active_run ? (
-                        s.active_run.name
-                      ) : (
-                        <span className="muted">—</span>
-                      )}
-                    </td>
+                    <td>{s.active_run ? s.active_run.name : <span className="muted">—</span>}</td>
                   </tr>
                 );
               })}

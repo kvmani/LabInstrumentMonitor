@@ -25,17 +25,11 @@ const SHOWN_EVENTS = new Set([
 ]);
 
 export function cssVar(name: string): string {
-  return (
-    getComputedStyle(document.documentElement).getPropertyValue(name).trim() ||
-    "#888"
-  );
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#888";
 }
 
 function midGaps(s: Series): Pt[] {
-  return s.gaps.map((g) => [
-    (Date.parse(g.start) + Date.parse(g.end)) / 2,
-    null,
-  ]);
+  return s.gaps.map((g) => [(Date.parse(g.start) + Date.parse(g.end)) / 2, null]);
 }
 
 function linePts(s: Series): Pt[] {
@@ -125,11 +119,7 @@ export function TimePanels(props: {
   const bottom = 52;
   const height =
     props.height ??
-    top +
-      bottom +
-      numericCount * numericH +
-      stateCount * stateH +
-      (panels.length - 1) * gapH;
+    top + bottom + numericCount * numericH + stateCount * stateH + (panels.length - 1) * gapH;
 
   useEffect(() => {
     if (!el.current) return;
@@ -143,13 +133,7 @@ export function TimePanels(props: {
           dataZoom?: { start?: number; end?: number }[];
         };
         const dz = opt.dataZoom?.[0];
-        if (
-          !dz ||
-          dz.start === undefined ||
-          dz.end === undefined ||
-          !zoomRef.current
-        )
-          return;
+        if (!dz || dz.start === undefined || dz.end === undefined || !zoomRef.current) return;
         if (dz.start <= 0.01 && dz.end >= 99.99) return;
         const { start: s, end: e } = rangeRef.current;
         const a = s + ((e - s) * dz.start) / 100;
@@ -176,12 +160,7 @@ export function TimePanels(props: {
     const gridLine = cssVar("--grid");
     const gapFill = cssVar("--gap");
     const bad = cssVar("--bad");
-    const palette = [
-      "--series-1",
-      "--series-2",
-      "--series-3",
-      "--series-4",
-    ].map(cssVar);
+    const palette = ["--series-1", "--series-2", "--series-3", "--series-4"].map(cssVar);
     const chByKey = new Map(channels.map((ch) => [ch.key, ch]));
     const grids: object[] = [];
     const xAxes: object[] = [];
@@ -189,8 +168,7 @@ export function TimePanels(props: {
     const out: object[] = [];
     const legend: string[] = [];
     const span = end - start;
-    const timeLabel = (v: number) =>
-      formatTime(v, tz, span > 36 * 3600_000, false);
+    const timeLabel = (v: number) => formatTime(v, tz, span > 36 * 3600_000, false);
 
     let y = top;
     panels.forEach((p, i) => {
@@ -221,9 +199,7 @@ export function TimePanels(props: {
           : {}),
       });
       y += h + gapH;
-      const chs = p.channels
-        .map((k) => chByKey.get(k))
-        .filter((x): x is ChannelStatus => !!x);
+      const chs = p.channels.map((k) => chByKey.get(k)).filter((x): x is ChannelStatus => !!x);
       const primary = chs.find((ch) => ch.role !== "setpoint") ?? chs[0];
       if (!primary) return;
       if (state) {
@@ -279,9 +255,7 @@ export function TimePanels(props: {
         const raw = mid + dir * (width / 2 + width * 0.06);
         // snap the axis end outward to a round step so its label reads cleanly
         const step = 10 ** Math.floor(Math.log10(width / 5));
-        return (
-          (dir > 0 ? Math.ceil(raw / step) : Math.floor(raw / step)) * step
-        );
+        return (dir > 0 ? Math.ceil(raw / step) : Math.floor(raw / step)) * step;
       };
       yAxes.push({
         type: log ? "log" : "value",
@@ -310,9 +284,7 @@ export function TimePanels(props: {
         const s = series.get(ch.key);
         if (!s) return;
         const color =
-          ch.role === "setpoint"
-            ? palette[1]!
-            : palette[j === 0 ? 0 : (j + 2) % palette.length]!;
+          ch.role === "setpoint" ? palette[1]! : palette[j === 0 ? 0 : (j + 2) % palette.length]!;
         if (ch.role === "setpoint") {
           out.push({
             name: ch.name,
@@ -336,10 +308,7 @@ export function TimePanels(props: {
           // a ±tolerance band is meaningful only at sample resolution, not across buckets
           if (p.tolerance_of === ch.key && tolerance && s.mode === "raw") {
             const band = (sign: number): Pt[] =>
-              stepPts(s).map(([t, v]) => [
-                t,
-                v === null ? null : v + sign * tolerance,
-              ]);
+              stepPts(s).map(([t, v]) => [t, v === null ? null : v + sign * tolerance]);
             const name = `Tolerance ±${tolerance} ${ch.unit}`;
             for (const sign of [1, -1]) {
               out.push({
@@ -496,9 +465,7 @@ export function TimePanels(props: {
                     ...s.gaps.map((g) => [
                       {
                         xAxis: Date.parse(g.start),
-                        name: g.open
-                          ? "no data yet"
-                          : `no data · ${formatDuration(g.duration_s)}`,
+                        name: g.open ? "no data yet" : `no data · ${formatDuration(g.duration_s)}`,
                       },
                       { xAxis: Date.parse(g.end) },
                     ]),
@@ -541,8 +508,7 @@ export function TimePanels(props: {
       });
     });
 
-    const fmtFor = (seriesName: string) =>
-      channels.find((ch) => seriesName.startsWith(ch.name));
+    const fmtFor = (seriesName: string) => channels.find((ch) => seriesName.startsWith(ch.name));
     c.setOption(
       {
         animation: false,
@@ -588,9 +554,7 @@ export function TimePanels(props: {
               axisValue: number;
             }[];
             if (!list.length) return "";
-            const lines = [
-              `<b>${formatTime(list[0]!.axisValue, tz, true, true)} ${tzLabel}</b>`,
-            ];
+            const lines = [`<b>${formatTime(list[0]!.axisValue, tz, true, true)} ${tzLabel}</b>`];
             for (const p of list) {
               const v = p.value?.[1];
               const ch = fmtFor(p.seriesName);

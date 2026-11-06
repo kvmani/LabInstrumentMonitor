@@ -398,7 +398,7 @@ def test_health_endpoints(world: World, db_url: str, fake_now: FakeNow) -> None:
     c = client_for(world, db_url, fake_now)
     assert c.get("/health/live").json()["status"] == "ok"
     ready = c.get("/health/ready")
-    assert ready.status_code == 200 and ready.json()["schema"] == "0005"
+    assert ready.status_code == 200 and ready.json()["schema"] == "0006"
     assert c.get("/api/v1/nope").status_code == 404
     assert c.get("/health/live").headers["x-content-type-options"] == "nosniff"
 

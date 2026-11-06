@@ -88,6 +88,7 @@ from labmon.server.series import (
 )
 from labmon.server.settings import Settings
 from labmon.server.status import StatusConfig, instrument_status, latest_display
+from labmon.server.views import ViewCreate, create_view, delete_view, list_views
 
 log = logging.getLogger("labmon.server")
 
@@ -386,6 +387,22 @@ def create_app(
                 raise HTTPException(404, "channel not found")
             scoped_instrument(conn, p, ch.instrument_id)
             return channel_series(conn, channel_id, s, e, now(), series_limits, max_points)
+
+    @app.get("/api/v1/instruments/{instrument_id}/views")
+    def get_views(instrument_id: str, p: User) -> dict[str, Any]:
+        return _records(lambda c: {"items": list_views(c, p, instrument_id)})
+
+    @app.post(
+        "/api/v1/instruments/{instrument_id}/views",
+        status_code=201,
+        dependencies=[Depends(require_same_origin)],
+    )
+    def post_view(instrument_id: str, body: ViewCreate, p: User) -> dict[str, Any]:
+        return _records(lambda c: create_view(c, p, instrument_id, body, now()))
+
+    @app.delete("/api/v1/views/{view_id}", dependencies=[Depends(require_same_origin)])
+    def remove_view(view_id: int, p: User) -> dict[str, Any]:
+        return _records(lambda c: delete_view(c, p, view_id, now()))
 
     @app.get("/api/v1/system/health")
     def get_system_health(p: User) -> dict[str, Any]:

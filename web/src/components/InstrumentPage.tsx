@@ -27,13 +27,9 @@ import type {
 import { AcqBadge, CollectorBadge, RunBadge, SimBadge } from "./Badges";
 import { ConnectionBanner } from "./ConnectionBanner";
 import { type PanelScale, TimePanels } from "./TimePanels";
-import {
-  AnnotationPanel,
-  NewRunForm,
-  RECORD_ROLES,
-  RunEditForm,
-} from "./Records";
+import { AnnotationPanel, NewRunForm, RECORD_ROLES, RunEditForm } from "./Records";
 import { ExportsPanel } from "./Exports";
+import { ViewMenu } from "./Views";
 import { XYChart } from "./XYChart";
 
 const PRESETS = [
@@ -124,23 +120,12 @@ function useSeries(
   );
 }
 
-function Tile({
-  ch,
-  tz,
-  drift,
-}: {
-  ch: ChannelStatus;
-  tz: string;
-  drift: number;
-}) {
+function Tile({ ch, tz, drift }: { ch: ChannelStatus; tz: string; drift: number }) {
   const latest = ch.latest;
   const good = ch.last_good;
   const showGood = good && latest && good.event_time !== latest.event_time;
   return (
-    <div
-      className={`card tile ${ch.fresh ? "" : "stale"}`}
-      data-testid={`tile-${ch.key}`}
-    >
+    <div className={`card tile ${ch.fresh ? "" : "stale"}`} data-testid={`tile-${ch.key}`}>
       <div className="tile-name">
         {ch.name}
         {ch.note ? <span className="faint"> · {ch.note}</span> : null}
@@ -151,8 +136,7 @@ function Tile({
       <div className="sub">
         {latest ? (
           <>
-            {formatTime(latest.event_time, tz, false)} ·{" "}
-            {formatAge(latest.age_s + drift)}
+            {formatTime(latest.event_time, tz, false)} · {formatAge(latest.age_s + drift)}
             {!ch.fresh && <strong> · not fresh</strong>}
             {latest.quality === "uncertain" && <strong> · uncertain</strong>}
           </>
@@ -162,8 +146,7 @@ function Tile({
       </div>
       {showGood && (
         <div className="sub">
-          last good {formatValue(ch, good)} at{" "}
-          {formatTime(good.event_time, tz, false)}
+          last good {formatValue(ch, good)} at {formatTime(good.event_time, tz, false)}
         </div>
       )}
     </div>
@@ -182,9 +165,7 @@ function ScaleControls({
   setScales: (s: Record<string, PanelScale>) => void;
 }) {
   const numeric = panels.filter((p) =>
-    p.channels.some(
-      (k) => channels.find((c) => c.key === k)?.data_type === "float",
-    ),
+    p.channels.some((k) => channels.find((c) => c.key === k)?.data_type === "float"),
   );
   return (
     <div className="axis-controls" aria-label="Axis scaling">
@@ -202,14 +183,10 @@ function ScaleControls({
             <select
               aria-label={`${p.title} axis`}
               value={sc.mode}
-              onChange={(e) =>
-                set({ mode: e.target.value as PanelScale["mode"] })
-              }
+              onChange={(e) => set({ mode: e.target.value as PanelScale["mode"] })}
             >
               <option value="auto">Auto</option>
-              {(p.log_allowed || p.scale === "log") && (
-                <option value="log">Log</option>
-              )}
+              {(p.log_allowed || p.scale === "log") && <option value="log">Log</option>}
               <option value="fixed">Fixed</option>
             </select>
             {sc.mode === "fixed" && (
@@ -271,27 +248,21 @@ function SeriesSummary({
   const gapTotal = s.gaps.reduce((a, g) => a + g.duration_s, 0);
   let sum = 0;
   if (s.mode === "raw") for (const p of s.points ?? []) sum += p[1] ?? 0;
-  else
-    for (const b of s.buckets ?? [])
-      sum += b.mean !== null ? b.mean * b.valid_count : 0;
+  else for (const b of s.buckets ?? []) sum += b.mean !== null ? b.mean * b.valid_count : 0;
   const mean = valid > 0 && ch.data_type === "float" ? sum / valid : null;
   const span =
-    (Math.min(Date.parse(s.range.end), Date.parse(s.server_time)) -
-      Date.parse(s.range.start)) /
+    (Math.min(Date.parse(s.range.end), Date.parse(s.server_time)) - Date.parse(s.range.start)) /
     1000;
   const expected = span > 0 ? span / ch.expected_cadence_s : 0;
   const coverage = expected > 0 ? Math.min(1, valid / expected) : null;
   return (
     <p className="summary" data-testid="series-summary">
-      <strong>{ch.name}:</strong> {n.toLocaleString()} samples (
-      {valid.toLocaleString()} valid
+      <strong>{ch.name}:</strong> {n.toLocaleString()} samples ({valid.toLocaleString()} valid
       {n - valid > 0 ? `, ${(n - valid).toLocaleString()} bad` : ""})
       {max &&
         ` · max ${formatNumber(ch, max[0])} ${ch.unit} at ${formatTime(max[1], tz, true)} ${tzLabel}`}
-      {min &&
-        ` · min ${formatNumber(ch, min[0])} ${ch.unit} at ${formatTime(min[1], tz, true)}`}
-      {mean !== null &&
-        ` · mean ${formatNumber(ch, mean)} ${ch.unit} (valid samples)`}
+      {min && ` · min ${formatNumber(ch, min[0])} ${ch.unit} at ${formatTime(min[1], tz, true)}`}
+      {mean !== null && ` · mean ${formatNumber(ch, mean)} ${ch.unit} (valid samples)`}
       {coverage !== null &&
         ` · coverage ${(coverage * 100).toFixed(1)} % of expected ${ch.expected_cadence_s} s cadence`}{" "}
       ·{" "}
@@ -345,9 +316,7 @@ function ReadingsTable({
                 .map((p) => (
                   <tr key={p[5]}>
                     <td className="mono">{formatTime(p[0], tz, true, true)}</td>
-                    <td className="num">
-                      {p[1] === null ? "—" : formatNumber(ch, p[1])}
-                    </td>
+                    <td className="num">{p[1] === null ? "—" : formatNumber(ch, p[1])}</td>
                     <td>
                       {p[2]}
                       {p[3] ? ` (${humanize(p[3])})` : ""}
@@ -376,15 +345,9 @@ function ReadingsTable({
                 .map((b) => (
                   <tr key={b.t}>
                     <td className="mono">{formatTime(b.t, tz, true)}</td>
-                    <td className="num">
-                      {b.min === null ? "—" : formatNumber(ch, b.min)}
-                    </td>
-                    <td className="num">
-                      {b.mean === null ? "—" : formatNumber(ch, b.mean)}
-                    </td>
-                    <td className="num">
-                      {b.max === null ? "—" : formatNumber(ch, b.max)}
-                    </td>
+                    <td className="num">{b.min === null ? "—" : formatNumber(ch, b.min)}</td>
+                    <td className="num">{b.mean === null ? "—" : formatNumber(ch, b.mean)}</td>
+                    <td className="num">{b.max === null ? "—" : formatNumber(ch, b.max)}</td>
                     <td>
                       {b.valid_count} / {b.count}
                     </td>
@@ -407,22 +370,16 @@ function Overview({
   tzLabel,
   theme,
   canRecord,
-}: Common & { s: InstrumentStatus; drift: number }) {
+  role,
+}: Common & { s: InstrumentStatus; drift: number; role: string }) {
   const [view, setView] = useState<View>({ kind: "live", preset: "1h" });
-  const [custom, setCustom] = useState<{ start: string; end: string } | null>(
-    null,
-  );
+  const [custom, setCustom] = useState<{ start: string; end: string } | null>(null);
   const [rangeError, setRangeError] = useState<string | null>(null);
   const [scales, setScales] = useState<Record<string, PanelScale>>({});
   const { panels, channels: meta } = useStableMeta(s);
-  const plotted = meta.filter((c) =>
-    panels.some((p) => p.channels.includes(c.key)),
-  );
+  const plotted = meta.filter((c) => panels.some((p) => p.channels.includes(c.key)));
   const span = spanOf(view);
-  const viewKey =
-    view.kind === "live"
-      ? `live:${view.preset}`
-      : `fixed:${view.start}:${view.end}`;
+  const viewKey = view.kind === "live" ? `live:${view.preset}` : `fixed:${view.start}:${view.end}`;
   const history = useSeries(
     plotted,
     `${s.instrument.id}|${viewKey}|${plotted.map((c) => c.id).join(",")}`,
@@ -432,9 +389,7 @@ function Overview({
     },
     view.kind === "live" ? liveInterval(span) : 15000,
   );
-  const range = history.data
-    ? { start: history.data.start, end: history.data.end }
-    : null;
+  const range = history.data ? { start: history.data.start, end: history.data.end } : null;
   const notes = usePolling<{ items: AnnotationView[] }>(
     (signal) => {
       const end = view.kind === "live" ? Date.now() + 1000 : view.end;
@@ -456,11 +411,7 @@ function Overview({
     if (!range) return;
     const mid = (range.start + range.end) / 2;
     const half = Math.max(30_000, ((range.end - range.start) * factor) / 2);
-    pause(
-      Math.round(mid - half),
-      Math.round(Math.min(mid + half, Date.now() + 1000)),
-      "zoomed",
-    );
+    pause(Math.round(mid - half), Math.round(Math.min(mid + half, Date.now() + 1000)), "zoomed");
   };
   const pan = (dir: number) => {
     if (!range) return;
@@ -473,8 +424,7 @@ function Overview({
     const b = fromLocalInput(custom.end, tz);
     if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a)
       return setRangeError("End must be after start.");
-    if (b - a > 31 * 86400_000)
-      return setRangeError("Ranges are limited to 31 days.");
+    if (b - a > 31 * 86400_000) return setRangeError("Ranges are limited to 31 days.");
     setRangeError(null);
     pause(a, b, "custom range");
   };
@@ -482,9 +432,7 @@ function Overview({
     ? `/api/v1/instruments/${encodeURIComponent(s.instrument.id)}/export.csv?${qs({ start: isoUtc(range.start), end: isoUtc(range.end) })}`
     : undefined;
   const primary = plotted.find((c) => c.role === "measurement") ?? plotted[0];
-  const primarySeries = primary
-    ? history.data?.series.get(primary.key)
-    : undefined;
+  const primarySeries = primary ? history.data?.series.get(primary.key) : undefined;
   const title = `${s.instrument.name}${s.instrument.simulated ? " [SIMULATED]" : ""}${range ? ` · ${formatTime(range.start, tz)} – ${formatTime(range.end, tz)} ${tzLabel}` : ""}`;
 
   return (
@@ -514,10 +462,7 @@ function Overview({
               onClick={() =>
                 setCustom(
                   custom ?? {
-                    start: toLocalInput(
-                      range?.start ?? Date.now() - 3600_000,
-                      tz,
-                    ),
+                    start: toLocalInput(range?.start ?? Date.now() - 3600_000, tz),
                     end: toLocalInput(range?.end ?? Date.now(), tz),
                   },
                 )
@@ -530,14 +475,11 @@ function Overview({
           <span data-testid="live-state" className="row">
             {view.kind === "live" ? (
               <span className="pill tone-ok">
-                <span className="dot" aria-hidden="true" /> Live — following
-                latest
+                <span className="dot" aria-hidden="true" /> Live — following latest
               </span>
             ) : (
               <>
-                <span className="pill tone-muted">
-                  ‖ Paused ({view.reason})
-                </span>
+                <span className="pill tone-muted">‖ Paused ({view.reason})</span>
                 <button
                   type="button"
                   className="btn-primary"
@@ -556,9 +498,7 @@ function Overview({
               <input
                 type="datetime-local"
                 value={custom.start}
-                onChange={(e) =>
-                  setCustom({ ...custom, start: e.target.value })
-                }
+                onChange={(e) => setCustom({ ...custom, start: e.target.value })}
               />
             </label>
             <label>
@@ -581,11 +521,7 @@ function Overview({
         )}
         <div className="toolbar">
           <span className="segmented" role="group" aria-label="Zoom and pan">
-            <button
-              type="button"
-              onClick={() => pan(-1)}
-              aria-label="Pan earlier"
-            >
+            <button type="button" onClick={() => pan(-1)} aria-label="Pan earlier">
               ◀
             </button>
             <button type="button" onClick={() => zoom(0.5)}>
@@ -598,11 +534,21 @@ function Overview({
               ▶
             </button>
           </span>
-          <ScaleControls
-            panels={panels}
-            channels={meta}
-            scales={scales}
-            setScales={setScales}
+          <ScaleControls panels={panels} channels={meta} scales={scales} setScales={setScales} />
+          <ViewMenu
+            instrumentId={s.instrument.id}
+            role={role}
+            current={() =>
+              view.kind === "live"
+                ? { preset: view.preset, scales }
+                : { start: isoUtc(view.start), end: isoUtc(view.end), scales }
+            }
+            apply={(c) => {
+              setScales(c.scales ?? {});
+              if (c.preset) setView({ kind: "live", preset: c.preset });
+              else if (c.start && c.end)
+                pause(Date.parse(c.start), Date.parse(c.end), "saved view");
+            }}
           />
           <span className="spacer" />
           {csvHref && (
@@ -612,17 +558,15 @@ function Overview({
           )}
         </div>
         <p className="sub">
-          Shift + mouse wheel on the chart zooms (the view then pauses). The PNG
-          button saves the chart with its labels.
+          Shift + mouse wheel on the chart zooms (the view then pauses). The PNG button saves the
+          chart with its labels.
         </p>
         {history.error && (
           <p className="error" role="alert">
             History request failed: {history.error.message}. Retrying…
           </p>
         )}
-        {history.loading && !history.data && (
-          <p className="muted">Loading history…</p>
-        )}
+        {history.loading && !history.data && <p className="muted">Loading history…</p>}
         {range && history.data && (
           <>
             <TimePanels
@@ -642,18 +586,8 @@ function Overview({
             />
             {primary && primarySeries && (
               <>
-                <SeriesSummary
-                  s={primarySeries}
-                  ch={primary}
-                  tz={tz}
-                  tzLabel={tzLabel}
-                />
-                <ReadingsTable
-                  s={primarySeries}
-                  ch={primary}
-                  tz={tz}
-                  tzLabel={tzLabel}
-                />
+                <SeriesSummary s={primarySeries} ch={primary} tz={tz} tzLabel={tzLabel} />
+                <ReadingsTable s={primarySeries} ch={primary} tz={tz} tzLabel={tzLabel} />
               </>
             )}
           </>
@@ -669,27 +603,14 @@ function Overview({
         onChanged={notes.refresh}
       />
       <div style={{ height: 14 }} />
-      <ExportsPanel
-        instrumentId={s.instrument.id}
-        range={range}
-        tz={tz}
-        tzLabel={tzLabel}
-      />
+      <ExportsPanel instrumentId={s.instrument.id} range={range} tz={tz} tzLabel={tzLabel} />
     </>
   );
 }
 
 // --- Runs -----------------------------------------------------------------------------------
 
-function Metric({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-}) {
+function Metric({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="card metric">
       <div className="m-label">{label}</div>
@@ -700,9 +621,7 @@ function Metric({
 }
 
 function num(v: unknown, digits: number, unit = ""): string {
-  return typeof v === "number"
-    ? `${v.toFixed(digits)}${unit ? ` ${unit}` : ""}`
-    : "—";
+  return typeof v === "number" ? `${v.toFixed(digits)}${unit ? ` ${unit}` : ""}` : "—";
 }
 
 function RunAnalysisView({
@@ -733,11 +652,7 @@ function RunAnalysisView({
   const markers = useMemo(() => {
     if (!a) return [];
     const sm = a.summary as Record<string, unknown>;
-    if (
-      a.kind === "tensile" &&
-      typeof sm.uts_mpa === "number" &&
-      typeof sm.uts_strain === "number"
-    )
+    if (a.kind === "tensile" && typeof sm.uts_mpa === "number" && typeof sm.uts_strain === "number")
       return [{ name: "UTS", x: sm.uts_strain, y: sm.uts_mpa }];
     if (a.kind === "dsc") {
       const out = [];
@@ -756,9 +671,7 @@ function RunAnalysisView({
   const start = Date.parse(run.started_at);
   const end = run.ended_at ? Date.parse(run.ended_at) : Date.now();
   const { panels, channels: meta } = useStableMeta(s);
-  const plotted = meta.filter((c) =>
-    panels.some((p) => p.channels.includes(c.key)),
-  );
+  const plotted = meta.filter((c) => panels.some((p) => p.channels.includes(c.key)));
   const windowSeries = useSeries(
     plotted,
     `run:${run.id}:${run.ended_at ?? "open"}`,
@@ -788,9 +701,7 @@ function RunAnalysisView({
           {run.source === "user"
             ? `Recorded by ${run.created_by ?? "unknown"}`
             : "Reported by the instrument program"}
-          {run.updated_at
-            ? ` · corrected ${formatTime(run.updated_at, tz)}`
-            : ""}
+          {run.updated_at ? ` · corrected ${formatTime(run.updated_at, tz)}` : ""}
         </span>
         {run.tags.map((t) => (
           <span key={t} className="pill tone-muted">
@@ -862,20 +773,14 @@ function RunAnalysisView({
                   rmse_mpa?: number;
                   note?: string;
                 } | null;
-                return f
-                  ? (f.note ?? `${f.points} points · rmse ${f.rmse_mpa} MPa`)
-                  : undefined;
+                return f ? (f.note ?? `${f.points} points · rmse ${f.rmse_mpa} MPa`) : undefined;
               })()}
             />
             <Metric label="Max force" value={num(sm.max_force_kn, 3, "kN")} />
             <Metric
               label="Fracture strain"
               value={num(sm.fracture_strain, 4)}
-              hint={
-                sm.fracture_after_uts === true
-                  ? "fracture after UTS ✓"
-                  : undefined
-              }
+              hint={sm.fracture_after_uts === true ? "fracture after UTS ✓" : undefined}
             />
             <Metric
               label="Geometry"
@@ -893,9 +798,7 @@ function RunAnalysisView({
             />
           </div>
           {Array.isArray(sm.reasons) && sm.reasons.length > 0 && (
-            <p className="notice">
-              Not reported: {(sm.reasons as string[]).join(" · ")}
-            </p>
+            <p className="notice">Not reported: {(sm.reasons as string[]).join(" · ")}</p>
           )}
         </>
       )}
@@ -913,11 +816,7 @@ function RunAnalysisView({
               return (
                 <Metric
                   key={k}
-                  label={
-                    k === "endotherm"
-                      ? "Endotherm peak (onset)"
-                      : "Exotherm peak (onset)"
-                  }
+                  label={k === "endotherm" ? "Endotherm peak (onset)" : "Exotherm peak (onset)"}
                   value={pk ? `${pk.sample_t_c.toFixed(2)} °C` : "—"}
                   hint={
                     pk
@@ -927,25 +826,16 @@ function RunAnalysisView({
                 />
               );
             })}
-            <Metric
-              label="Sign convention"
-              value="exo ↑"
-              hint={a.sign_convention ?? undefined}
-            />
-            <Metric
-              label="Invalid pairs"
-              value={String(sm.invalid_pairs ?? 0)}
-            />
+            <Metric label="Sign convention" value="exo ↑" hint={a.sign_convention ?? undefined} />
+            <Metric label="Invalid pairs" value={String(sm.invalid_pairs ?? 0)} />
           </div>
           <p className="sub">
-            Peak areas use a straight baseline across the peak window and are
-            estimates for rehearsal, not certified results.
+            Peak areas use a straight baseline across the peak window and are estimates for
+            rehearsal, not certified results.
           </p>
         </>
       )}
-      {detail.tolerance && (
-        <ToleranceView t={detail.tolerance} tz={tz} tzLabel={tzLabel} />
-      )}
+      {detail.tolerance && <ToleranceView t={detail.tolerance} tz={tz} tzLabel={tzLabel} />}
       {a && (
         <XYChart
           title={`${run.name} · ${a.y.label} vs ${a.x.label}${run.simulated ? " [SIMULATED]" : ""}`}
@@ -982,15 +872,7 @@ function RunAnalysisView({
   );
 }
 
-function ToleranceView({
-  t,
-  tz,
-  tzLabel,
-}: {
-  t: SoakTolerance;
-  tz: string;
-  tzLabel: string;
-}) {
+function ToleranceView({ t, tz, tzLabel }: { t: SoakTolerance; tz: string; tzLabel: string }) {
   if (!t.soak)
     return (
       <p className="sub" data-testid="soak-tolerance">
@@ -1039,15 +921,13 @@ function ToleranceView({
               {t.excursions.map((e) => (
                 <tr key={e.start}>
                   <td className="mono sub">
-                    {formatTime(e.start, tz, false)} –{" "}
-                    {formatTime(e.end, tz, false)}
+                    {formatTime(e.start, tz, false)} – {formatTime(e.end, tz, false)}
                   </td>
                   <td>{e.direction === "above" ? "▲ above" : "▼ below"}</td>
                   <td className="num">{formatDuration(e.duration_s)}</td>
                   <td className="num">
                     {e.max_deviation_c > 0 ? "+" : ""}
-                    {e.max_deviation_c.toFixed(2)} °C at{" "}
-                    {formatTime(e.at, tz, false)}
+                    {e.max_deviation_c.toFixed(2)} °C at {formatTime(e.at, tz, false)}
                   </td>
                 </tr>
               ))}
@@ -1056,23 +936,16 @@ function ToleranceView({
         </div>
       )}
       <p className="sub">
-        Rules: process value and recorded setpoint paired by acquisition frame
-        during the Soak phase; each sample holds until the next for at most{" "}
-        {String(t.rules.max_hold_s)} s; gaps and bad samples are unobserved;
-        excursions separated by less than {String(t.rules.merge_dwell_s)} s
-        merge.
+        Rules: process value and recorded setpoint paired by acquisition frame during the Soak
+        phase; each sample holds until the next for at most {String(t.rules.max_hold_s)} s; gaps and
+        bad samples are unobserved; excursions separated by less than{" "}
+        {String(t.rules.merge_dwell_s)} s merge.
       </p>
     </div>
   );
 }
 
-function Runs({
-  s,
-  tz,
-  tzLabel,
-  theme,
-  canRecord,
-}: Common & { s: InstrumentStatus }) {
+function Runs({ s, tz, tzLabel, theme, canRecord }: Common & { s: InstrumentStatus }) {
   const [creating, setCreating] = useState(false);
   const runs = usePolling(
     (signal) =>
@@ -1085,15 +958,10 @@ function Runs({
   );
   const items = runs.data?.items ?? [];
   const [selected, setSelected] = useState<string | null>(null);
-  const current =
-    selected ?? items.find((r) => !r.active)?.id ?? items[0]?.id ?? null;
+  const current = selected ?? items.find((r) => !r.active)?.id ?? items[0]?.id ?? null;
   const detail = usePolling(
     current
-      ? (signal) =>
-          api.get<RunDetail>(
-            `/api/v1/runs/${encodeURIComponent(current)}`,
-            signal,
-          )
+      ? (signal) => api.get<RunDetail>(`/api/v1/runs/${encodeURIComponent(current)}`, signal)
       : null,
     items.find((r) => r.id === current)?.active ? 5000 : 600_000,
     `run:${current}`,
@@ -1101,9 +969,7 @@ function Runs({
   if (runs.loading && !runs.data) return <p className="muted">Loading runs…</p>;
   const toolbar = (
     <div className="toolbar">
-      <span className="sub">
-        {items.length} runs · instrument-reported and user records
-      </span>
+      <span className="sub">{items.length} runs · instrument-reported and user records</span>
       <span className="spacer" />
       {canRecord && (
         <button
@@ -1178,11 +1044,7 @@ function Runs({
           </table>
         </div>
         <div>
-          {detail.error && (
-            <p className="error">
-              Could not load the run: {detail.error.message}
-            </p>
-          )}
+          {detail.error && <p className="error">Could not load the run: {detail.error.message}</p>}
           {detail.data ? (
             <RunAnalysisView
               detail={detail.data}
@@ -1220,8 +1082,7 @@ function FaultList({ faults, empty }: { faults: Fault[]; empty: string }) {
       {faults.map((f) => (
         <li key={f.code}>
           <span className={`pill ${SEVERITY[f.severity].tone}`}>
-            <span aria-hidden="true">{SEVERITY[f.severity].icon}</span>{" "}
-            {f.severity}
+            <span aria-hidden="true">{SEVERITY[f.severity].icon}</span> {f.severity}
           </span>{" "}
           <strong>{f.message}</strong>
           <div className="sub">Next step: {f.next_step}</div>
@@ -1232,9 +1093,7 @@ function FaultList({ faults, empty }: { faults: Fault[]; empty: string }) {
 }
 
 function bytes(n: number): string {
-  return n > 2 ** 30
-    ? `${(n / 2 ** 30).toFixed(1)} GiB`
-    : `${(n / 2 ** 20).toFixed(0)} MiB`;
+  return n > 2 ** 30 ? `${(n / 2 ** 30).toFixed(1)} GiB` : `${(n / 2 ** 20).toFixed(0)} MiB`;
 }
 
 function SystemCard() {
@@ -1263,8 +1122,7 @@ function SystemCard() {
           <>
             <dt>Export disk free</dt>
             <dd>
-              {bytes(d.export_disk.free_bytes)} of{" "}
-              {bytes(d.export_disk.total_bytes)}
+              {bytes(d.export_disk.free_bytes)} of {bytes(d.export_disk.total_bytes)}
             </dd>
           </>
         )}
@@ -1275,12 +1133,7 @@ function SystemCard() {
   );
 }
 
-function Diagnostics({
-  s,
-  drift,
-  tz,
-  tzLabel,
-}: Common & { s: InstrumentStatus; drift: number }) {
+function Diagnostics({ s, drift, tz, tzLabel }: Common & { s: InstrumentStatus; drift: number }) {
   const events = usePolling(
     (signal) =>
       api.get<{ items: AcqEvent[] }>(
@@ -1293,11 +1146,7 @@ function Diagnostics({
   const c = s.collector;
   return (
     <>
-      <section
-        className="card card-pad"
-        style={{ marginBottom: 14 }}
-        data-testid="faults"
-      >
+      <section className="card card-pad" style={{ marginBottom: 14 }} data-testid="faults">
         <h2 className="section-title">Faults and next steps</h2>
         <FaultList
           faults={s.faults}
@@ -1328,11 +1177,7 @@ function Diagnostics({
                   : "—"}
               </dd>
               <dt>Pending upload</dt>
-              <dd>
-                {typeof c.unacknowledged === "number"
-                  ? `${c.unacknowledged} records`
-                  : "—"}
-              </dd>
+              <dd>{typeof c.unacknowledged === "number" ? `${c.unacknowledged} records` : "—"}</dd>
               <dt>Upload fault</dt>
               <dd>{c.upload_fault ?? "none"}</dd>
               <dt>Acquisition</dt>
@@ -1361,9 +1206,8 @@ function Diagnostics({
               <dd>
                 {s.channels.map((ch) => (
                   <div key={ch.id} className="sub">
-                    {ch.name} · {ch.unit || "state"} · every{" "}
-                    {ch.expected_cadence_s} s · fresh within{" "}
-                    {ch.freshness_window_s} s
+                    {ch.name} · {ch.unit || "state"} · every {ch.expected_cadence_s} s · fresh
+                    within {ch.freshness_window_s} s
                   </div>
                 ))}
               </dd>
@@ -1423,19 +1267,14 @@ export function InstrumentPage({
   const [tab, setTab] = useState<Tab>("overview");
   const status = usePolling(
     (signal) =>
-      api.get<InstrumentStatus>(
-        `/api/v1/instruments/${encodeURIComponent(id)}/status`,
-        signal,
-      ),
+      api.get<InstrumentStatus>(`/api/v1/instruments/${encodeURIComponent(id)}/status`, signal),
     2000,
     `status:${id}`,
   );
   if (status.error instanceof ApiError && status.error.status === 404) {
     return (
       <main>
-        <p className="empty">
-          Instrument not found or not visible to your account.
-        </p>
+        <p className="empty">Instrument not found or not visible to your account.</p>
         <a href="#/">← Back to the fleet</a>
       </main>
     );
@@ -1473,16 +1312,13 @@ export function InstrumentPage({
               <div className="sub">
                 {s.instrument.id} · {s.instrument.lab_name}
                 {s.instrument.location ? ` · ${s.instrument.location}` : ""}
-                {s.instrument.asset_id
-                  ? ` · asset ${s.instrument.asset_id}`
-                  : ""}{" "}
-                · {s.instrument.lifecycle}
+                {s.instrument.asset_id ? ` · asset ${s.instrument.asset_id}` : ""} ·{" "}
+                {s.instrument.lifecycle}
               </div>
               {s.active_run && (
                 <div className="sub" style={{ marginTop: 6 }}>
                   <span className="pill tone-ok">
-                    <span className="dot" aria-hidden="true" />{" "}
-                    {s.active_run.name}
+                    <span className="dot" aria-hidden="true" /> {s.active_run.name}
                   </span>{" "}
                   since {formatTime(s.active_run.started_at, tz, false)}
                 </div>
@@ -1499,9 +1335,7 @@ export function InstrumentPage({
               <div className="sub">
                 Process state:{" "}
                 <strong data-testid="process-state">
-                  {s.process_state.state === "unknown"
-                    ? "Unknown"
-                    : s.process_state.state}
+                  {s.process_state.state === "unknown" ? "Unknown" : s.process_state.state}
                 </strong>
                 {s.process_state.source
                   ? ` (from ${s.process_state.source.replace("channel:", "")} channel)`
@@ -1545,6 +1379,7 @@ export function InstrumentPage({
               tzLabel={tzLabel}
               theme={theme}
               canRecord={RECORD_ROLES.has(labs[s.instrument.lab_id] ?? "")}
+              role={labs[s.instrument.lab_id] ?? ""}
             />
           )}
           {tab === "runs" && (
@@ -1557,13 +1392,7 @@ export function InstrumentPage({
             />
           )}
           {tab === "diagnostics" && (
-            <Diagnostics
-              s={s}
-              drift={drift}
-              tz={tz}
-              tzLabel={tzLabel}
-              theme={theme}
-            />
+            <Diagnostics s={s} drift={drift} tz={tz} tzLabel={tzLabel} theme={theme} />
           )}
         </>
       )}

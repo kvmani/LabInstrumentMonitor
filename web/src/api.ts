@@ -14,7 +14,12 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     headers.set("X-Labmon-Request", "1");
     if (init.body) headers.set("Content-Type", "application/json");
   }
-  const res = await fetch(path, { ...init, headers, credentials: "same-origin", cache: "no-store" });
+  const res = await fetch(path, {
+    ...init,
+    headers,
+    credentials: "same-origin",
+    cache: "no-store",
+  });
   if (!res.ok) {
     let detail = res.statusText;
     try {

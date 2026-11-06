@@ -20,8 +20,7 @@ export function Sparkline({
     series.mode === "raw"
       ? (series.points ?? []).map((p) => [Date.parse(p[0]), p[1]])
       : (series.buckets ?? []).map((b) => [Date.parse(b.t), b.mean]);
-  for (const g of series.gaps)
-    pts.push([(Date.parse(g.start) + Date.parse(g.end)) / 2, null]);
+  for (const g of series.gaps) pts.push([(Date.parse(g.start) + Date.parse(g.end)) / 2, null]);
   pts.sort((a, b) => a[0] - b[0]);
   const tf = (v: number) => (log ? Math.log10(Math.max(v, 1e-12)) : v);
   const vals = pts
@@ -30,11 +29,7 @@ export function Sparkline({
     .map(tf);
   if (vals.length < 2)
     return (
-      <div
-        className="spark muted sub"
-        role="img"
-        aria-label={`${label}: not enough data`}
-      >
+      <div className="spark muted sub" role="img" aria-label={`${label}: not enough data`}>
         no recent data
       </div>
     );
@@ -70,10 +65,7 @@ export function Sparkline({
         const last = s.split(" ").at(-1)!.split(",")[0];
         return (
           <g key={i}>
-            <polygon
-              className="area"
-              points={`${first},${H} ${s} ${last},${H}`}
-            />
+            <polygon className="area" points={`${first},${H} ${s} ${last},${H}`} />
             <polyline className="line" points={s} />
           </g>
         );

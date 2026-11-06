@@ -34,6 +34,7 @@ EXPECTED_TABLES = {
     "rollup_dirty",
     "annotation",
     "export_job",
+    "saved_view",
 }
 
 
@@ -41,7 +42,7 @@ def test_upgrade_downgrade_upgrade(empty_db_url: str) -> None:
     engine = create_engine(empty_db_url)
     assert migrate.current_revision(engine) is None
     migrate.upgrade(empty_db_url)
-    assert migrate.current_revision(engine) == migrate.head_revision() == "0005"
+    assert migrate.current_revision(engine) == migrate.head_revision() == "0006"
     tables = set(inspect(engine).get_table_names())
     assert EXPECTED_TABLES <= tables
     with engine.connect() as c:
