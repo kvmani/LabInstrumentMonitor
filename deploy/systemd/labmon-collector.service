@@ -1,0 +1,19 @@
+[Unit]
+Description=Lab Instrument Monitor collector (instrument PC, Linux)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=labmon-collector
+Group=labmon-collector
+ExecStart=/opt/labmon/current/venv/bin/labmon-collector run --config /etc/labmon/collector/collector.toml
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/labmon-collector
+
+[Install]
+WantedBy=multi-user.target

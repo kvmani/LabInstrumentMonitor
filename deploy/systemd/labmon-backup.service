@@ -1,0 +1,14 @@
+[Unit]
+Description=Lab Instrument Monitor logical backup
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=labmon
+Group=labmon
+EnvironmentFile=/etc/labmon/labmon.env
+ExecStart=/opt/labmon/current/venv/bin/labmon-server backup --out-dir /var/lib/labmon/backups --keep-days 14
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/labmon

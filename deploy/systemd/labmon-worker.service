@@ -1,0 +1,23 @@
+[Unit]
+Description=Lab Instrument Monitor worker (rollups and exports)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=labmon
+Group=labmon
+EnvironmentFile=/etc/labmon/labmon.env
+WorkingDirectory=/var/lib/labmon
+ExecStart=/opt/labmon/current/venv/bin/labmon-server worker
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/labmon
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

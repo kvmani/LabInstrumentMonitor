@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Lab Instrument Monitor backup
+
+[Timer]
+OnCalendar=*-*-* 01:17:00
+Persistent=true
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

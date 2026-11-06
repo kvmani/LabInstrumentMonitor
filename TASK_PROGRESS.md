@@ -91,6 +91,16 @@ Gate after step 8: `scripts/check.sh` → 181 passed; `--e2e` 2 passed (last run
 scientist usability review (needs people), and hour-level rollups only if larger fleets need
 them (8-series 30-day p95 is 1.12 s today).
 
+**Step 9 — M3 preparation (simulated rehearsal, done):** `doctor`, `backup`, `restore-check`,
+systemd units (API, worker, backup timer, Linux collector), nginx TLS site, environment template,
+`deploy/install.sh`, `scripts/build-release.sh` (wheelhouse, SBOM, checksums; 15 MB tarball in
+~1.7 min). Rehearsal in a temporary root with proxies pointed at a dead port: offline install,
+migrate to 0006, doctor OK, API ready and UI served from the installed release, backup +
+verified restore (counts match), install of a second release, rollback by symlink, tampered
+bundle refused. Defect found and fixed: renaming a built venv broke its entry points. Docs:
+`docs/operations/deployment.md`, ADR 0006. Not yet done: staging VM, real systemd/reboot,
+TLS from a client workstation, Windows collector service, PITR, 72 h soak.
+
 ### Checkpoint 2 — owner requests of 2026-11-06 (simulated)
 
 | Request | Result | Evidence |
