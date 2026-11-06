@@ -72,6 +72,25 @@ swamped bucketed views (tolerance now only at sample resolution; process value d
 
 Gate: `scripts/check.sh --e2e` → 154 passed + 2 e2e; `--slow` 30-day evidence passed.
 
+**Step 6 — OPS-01 diagnostics (done):** fault rules with severities and one next step each
+(17 unit tests), collector disk headroom in the heartbeat, `/api/v1/system/health` (rollup
+queue, export jobs, database size, export disk). Backup freshness is reported as *not yet
+monitored* (M3).
+
+**Step 7 — HIST-01 saved views (done):** migration `0006`; personal views private, lab
+templates for custodian/administrator (audited); validated configs; UI views menu.
+Prettier 3.8.1 pinned and enforced by `scripts/check.sh`.
+
+**Step 8 — administration (done):** audited `labmon-server admin` for labs, users, grants,
+collectors, token rotation/revocation and simulated enrolment; `docs/operations/
+administration.md`. Integration test provisions a lab from scratch.
+
+Gate after step 8: `scripts/check.sh` → 181 passed; `--e2e` 2 passed (last run at step 7).
+
+**M2 status:** all buildable M2 items are implemented with simulated evidence. Open: the
+scientist usability review (needs people), and hour-level rollups only if larger fleets need
+them (8-series 30-day p95 is 1.12 s today).
+
 ### Checkpoint 2 — owner requests of 2026-11-06 (simulated)
 
 | Request | Result | Evidence |
