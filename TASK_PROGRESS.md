@@ -41,6 +41,21 @@ field-verified, and no simulated pass is field acceptance.
 - Defect found by the equivalence test and fixed: min/max ties across a recomputed edge minute
   and an aggregated partial went to the later timestamp.
 
+**Step 2 result — RUN-01 runs and annotations (simulated, done):** migration `0004`; user run
+records (backdated, never future), corrections with required reason and before/after audit;
+instrument-reported runs keep name and window; annotations (points or windows) with revisions
+and soft retraction; write access for scientist/custodian/administrator only (viewer/auditor
+read-only, other labs 404). UI: chart markers, annotations panel, new/correct/end run.
+10 integration tests + browser flow.
+
+**Step 3 result — EXP-01 durable exports (simulated, done):** migration `0005`; leased jobs in
+the separate `labmon-server worker`; ZIP with `data.csv` + `manifest.json` (snapshot cutoff,
+profile revisions, counts, sha256); atomic publication; access re-checked at download; 7-day
+expiry. 5 integration tests (checksums agree, killed worker recovered, no partial files,
+access/expiry) + browser download.
+
+Gate after step 3: `scripts/check.sh --e2e` → 150 passed + 2 e2e passed.
+
 ### Checkpoint 2 — owner requests of 2026-11-06 (simulated)
 
 | Request | Result | Evidence |

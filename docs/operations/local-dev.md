@@ -25,10 +25,12 @@ export LABMON_ENV=development         # enables bootstrap-dev and /api/docs; coo
 .venv/bin/labmon-server bootstrap-dev --password 'choose-a-dev-password' --with-dsc
 .venv/bin/labmon-server serve --port 8000
 .venv/bin/labmon-collector run --config .devdata/collector/collector.toml
-.venv/bin/labmon-server rollup-worker        # keeps minute rollups current (separate process)
+.venv/bin/labmon-server worker               # rollups + durable exports (separate process)
 ```
 
-The rollup worker is a separate process so aggregation never blocks API workers. Without it the
+The worker is a separate process so aggregation and exports never block API workers. Export
+ZIPs are written to `LABMON_EXPORT_DIR` (default `var/exports`, outside the release) and expire
+after 7 days. Without it the
 API stays correct (unprocessed minutes are aggregated from raw rows and reported as
 `rebuilding_minutes`), but long views get slower. `--once` drains the queue and exits.
 
@@ -36,7 +38,7 @@ API stays correct (unprocessed minutes are aggregated from raw rows and reported
 
 ```bash
 .venv/bin/labmon-server load-fixture furnace-30d     # ~4 min: 7.7 M samples, original times
-.venv/bin/labmon-server rollup-worker --once         # ~2 min: 130 k minute rollups
+.venv/bin/labmon-server worker --once                # ~2 min: 130 k minute rollups
 LABMON_RUN_SLOW=1 .venv/bin/pytest -s tests/perf     # or: scripts/check.sh --slow
 ```
 
