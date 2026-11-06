@@ -1,0 +1,28 @@
+{
+  "description": "Protocol v1 bad-quality sample (open thermocouple): value withheld, raw kept.",
+  "envelope": {
+    "capture_time": "2026-11-06T08:30:01.000000Z",
+    "channel_id": "furnace-01.pv",
+    "clock_confidence": "trusted",
+    "collector_id": "col-bay1-01",
+    "detail": null,
+    "event_type": null,
+    "frame_id": "furnace-01:1794040201",
+    "instrument_id": "furnace-01",
+    "kind": "sample",
+    "profile_revision_id": "furnace-01-r1",
+    "quality": "bad",
+    "quality_reason": "sensor_open",
+    "raw": "OPEN",
+    "seq": 104,
+    "simulated": true,
+    "source_status": "open_thermocouple",
+    "source_time": null,
+    "source_time_meaning": "absent",
+    "spool_epoch": 3634561,
+    "v": 1,
+    "value": null
+  },
+  "canonical": "{\"capture_time\":\"2026-11-06T08:30:01.000000Z\",\"channel_id\":\"furnace-01.pv\",\"clock_confidence\":\"trusted\",\"collector_id\":\"col-bay1-01\",\"detail\":null,\"event_type\":null,\"frame_id\":\"furnace-01:1794040201\",\"instrument_id\":\"furnace-01\",\"kind\":\"sample\",\"profile_revision_id\":\"furnace-01-r1\",\"quality\":\"bad\",\"quality_reason\":\"sensor_open\",\"raw\":\"OPEN\",\"seq\":104,\"simulated\":true,\"source_status\":\"open_thermocouple\",\"source_time\":null,\"source_time_meaning\":\"absent\",\"spool_epoch\":3634561,\"v\":1,\"value\":null}",
+  "digest": "b6501f37b1b4dd57057209291c96ff1e9d99618f31671a7e27d127f5878075de"
+}

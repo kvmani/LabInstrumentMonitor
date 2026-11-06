@@ -1,0 +1,31 @@
+{
+  "description": "Protocol v1 diagnostic event envelope. Immutable fixture.",
+  "envelope": {
+    "capture_time": "2026-11-06T08:30:02.000000Z",
+    "channel_id": null,
+    "clock_confidence": "trusted",
+    "collector_id": "col-bay1-01",
+    "detail": {
+      "reason": "no response from controller",
+      "tick": 1794040202
+    },
+    "event_type": "source_unavailable",
+    "frame_id": null,
+    "instrument_id": "furnace-01",
+    "kind": "event",
+    "profile_revision_id": "furnace-01-r1",
+    "quality": null,
+    "quality_reason": null,
+    "raw": null,
+    "seq": 105,
+    "simulated": true,
+    "source_status": null,
+    "source_time": null,
+    "source_time_meaning": "absent",
+    "spool_epoch": 3634561,
+    "v": 1,
+    "value": null
+  },
+  "canonical": "{\"capture_time\":\"2026-11-06T08:30:02.000000Z\",\"channel_id\":null,\"clock_confidence\":\"trusted\",\"collector_id\":\"col-bay1-01\",\"detail\":{\"reason\":\"no response from controller\",\"tick\":1794040202},\"event_type\":\"source_unavailable\",\"frame_id\":null,\"instrument_id\":\"furnace-01\",\"kind\":\"event\",\"profile_revision_id\":\"furnace-01-r1\",\"quality\":null,\"quality_reason\":null,\"raw\":null,\"seq\":105,\"simulated\":true,\"source_status\":null,\"source_time\":null,\"source_time_meaning\":\"absent\",\"spool_epoch\":3634561,\"v\":1,\"value\":null}",
+  "digest": "9dfd4baadc3bb6c667aa37eccd9df1f0ca6cf553b78ddc92f0ef1d1694892edc"
+}

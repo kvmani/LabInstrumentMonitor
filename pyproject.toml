@@ -1,0 +1,66 @@
+[project]
+name = "labmon"
+version = "0.1.0.dev0"
+description = "Air-gapped, read-only lab instrument monitor (simulator-first)."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+# License intentionally unset: the repository owner has not yet confirmed one (see TASK_PROGRESS.md).
+dependencies = [
+  "fastapi>=0.115",
+  "pydantic>=2.9",
+  "sqlalchemy>=2.0.36",
+  "psycopg[binary]>=3.2",
+  "alembic>=1.14",
+  "uvicorn>=0.32",
+  "httpx>=0.28",
+  "argon2-cffi>=23.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3",
+  "ruff>=0.8",
+  "mypy>=1.13",
+  "playwright==1.63.0",
+]
+
+[project.scripts]
+labmon-server = "labmon.server.cli:main"
+labmon-collector = "labmon.collector.cli:main"
+labmon-devdb = "labmon.devtools.pgcluster:main"
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/labmon"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "BLE"]
+ignore = ["S101", "S311", "S603", "S607", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106", "S108"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["labmon"]
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["argon2.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "integration: needs a real PostgreSQL 16 server",
+  "e2e: starts real processes and a browser",
+]
+addopts = "-ra"

@@ -1,0 +1,28 @@
+{
+  "description": "Protocol v1 furnace sample envelope (good quality). Immutable fixture.",
+  "envelope": {
+    "capture_time": "2026-11-06T08:30:00.000000Z",
+    "channel_id": "furnace-01.pv",
+    "clock_confidence": "trusted",
+    "collector_id": "col-bay1-01",
+    "detail": null,
+    "event_type": null,
+    "frame_id": "furnace-01:1794040200",
+    "instrument_id": "furnace-01",
+    "kind": "sample",
+    "profile_revision_id": "furnace-01-r1",
+    "quality": "good",
+    "quality_reason": null,
+    "raw": "850.12",
+    "seq": 101,
+    "simulated": true,
+    "source_status": null,
+    "source_time": null,
+    "source_time_meaning": "absent",
+    "spool_epoch": 3634561,
+    "v": 1,
+    "value": 850.12
+  },
+  "canonical": "{\"capture_time\":\"2026-11-06T08:30:00.000000Z\",\"channel_id\":\"furnace-01.pv\",\"clock_confidence\":\"trusted\",\"collector_id\":\"col-bay1-01\",\"detail\":null,\"event_type\":null,\"frame_id\":\"furnace-01:1794040200\",\"instrument_id\":\"furnace-01\",\"kind\":\"sample\",\"profile_revision_id\":\"furnace-01-r1\",\"quality\":\"good\",\"quality_reason\":null,\"raw\":\"850.12\",\"seq\":101,\"simulated\":true,\"source_status\":null,\"source_time\":null,\"source_time_meaning\":\"absent\",\"spool_epoch\":3634561,\"v\":1,\"value\":850.12}",
+  "digest": "cc62e052585ee54ca780506faf829d2bdd89df150bdcb9c6486e64522a3d6b3d"
+}
