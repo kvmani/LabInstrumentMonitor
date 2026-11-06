@@ -72,6 +72,7 @@ else
       --require-hashes -r "$BUNDLE/requirements.txt"
   "$DEST/venv/bin/pip" install --quiet --no-index --no-deps "$BUNDLE"/wheelhouse/labmon-*.whl
   cp -r "$BUNDLE/web" "$DEST/web"
+  cp -r "$BUNDLE/deploy" "$DEST/deploy"    # keeps install.sh for later --activate rollbacks
   cp "$BUNDLE/RELEASE.json" "$BUNDLE/SBOM.json" "$DEST/"
   rm "$DEST/.installing"
 fi

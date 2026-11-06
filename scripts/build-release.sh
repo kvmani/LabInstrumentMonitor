@@ -4,7 +4,8 @@
 #
 #   scripts/build-release.sh [OUT_DIR]      -> OUT_DIR/labmon-<version>/ and .tar.gz (+ .sha256)
 #
-# Bundle: wheelhouse (hash-locked dependencies + the labmon wheel), prebuilt web UI, deployment
+# Bundle: wheelhouse (hash-locked dependencies + the labmon wheel), wheelhouse-win (the same set
+# for the Windows 11 collector), prebuilt web UI, deployment
 # assets, requirements.txt with hashes, SBOM.json, RELEASE.json and SHA256SUMS.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -19,10 +20,15 @@ uv export --frozen --no-dev --no-emit-project --format requirements-txt -o "$B/r
 uvx --quiet --python 3.12 pip download --quiet --only-binary=:all: --dest "$B/wheelhouse" \
     --python-version 3.12 --platform manylinux2014_x86_64 --platform manylinux_2_17_x86_64 \
     --platform manylinux_2_28_x86_64 --platform any -r "$B/requirements.txt"
+# Windows 11 collector (ADR 0007): the same hash-locked set for CPython 3.12 win_amd64
+uvx --quiet --python 3.12 pip download --quiet --only-binary=:all: --dest "$B/wheelhouse-win" \
+    --python-version 3.12 --platform win_amd64 --platform any -r "$B/requirements.txt"
 uv build --wheel --out-dir "$B/wheelhouse" >/dev/null
+cp "$B"/wheelhouse/labmon-*.whl "$B/wheelhouse-win/"
 (cd web && npm ci --silent && npm run --silent build >/dev/null)
 cp -r web/dist "$B/web"
-mkdir -p "$B/deploy" && cp -r deploy/systemd deploy/nginx deploy/labmon.env.example deploy/install.sh "$B/deploy/"
+mkdir -p "$B/deploy" && cp -r deploy/systemd deploy/nginx deploy/windows deploy/labmon.env.example deploy/install.sh \
+    "$B/deploy/"
 cp LICENSE "$B/"
 .venv/bin/python scripts/sbom.py > "$B/SBOM.json"
 cat > "$B/RELEASE.json" <<EOF

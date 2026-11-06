@@ -42,7 +42,7 @@ Create the first operator account with `labmon-server admin` (see administration
 ## 4 · Rollback (code only)
 
 ```bash
-sudo /opt/labmon/current/deploy/install.sh --activate <previous-version>   # or the bundle's copy
+sudo /opt/labmon/current/deploy/install.sh --activate <previous-version>
 ```
 
 Migrations are expand-only, so the previous release runs on the newer schema and **no data is
@@ -60,10 +60,27 @@ labmon-server restore-check /var/lib/labmon/backups/labmon-<stamp>.dump \
 ```
 
 Before relying on the system during multi-day furnace runs, add base backups with WAL
-archiving (point-in-time recovery) as a site procedure and rehearse it (SPECIFICATIONS §10).
+archiving and rehearse point-in-time recovery: see [pitr.md](pitr.md) (SPECIFICATIONS §10).
 
 ## 6 · Collector (instrument PC)
 
 Linux: install the same bundle, place `collector.toml` and the 0600 token under
-`/etc/labmon/collector/`, and enable `deploy/systemd/labmon-collector.service`. A Windows 11
-service wrapper is still open (M3).
+`/etc/labmon/collector/`, and enable `deploy/systemd/labmon-collector.service`.
+
+Windows 11 (ADR 0007, **not yet rehearsed on Windows**): install CPython 3.12 from the site's
+approved installer. Obtain WinSW v2 and verify its recorded hash. Then, from an elevated
+PowerShell in the extracted bundle:
+
+```powershell
+.\deploy\windows\install-collector.ps1 -Bundle . -WinSW D:\tools\WinSW-x64.exe `
+    -Config D:\transfer\collector.toml -Token D:\transfer\collector.token
+Get-Service labmon-collector                                         # Running
+& "$env:ProgramFiles\labmon\current\venv\Scripts\labmon-collector.exe" status `
+    --config "$env:ProgramData\labmon\collector\collector.toml"
+.\deploy\windows\install-collector.ps1 -Activate <previous-version>       # code rollback
+```
+
+The script verifies every bundle checksum and installs offline. It restricts the token to
+LocalService and Administrators, and registers the service with restart-on-failure. Delete the
+transferred token copy afterwards. To retire a collector, stop the service, run
+`labmon-collector flush` (administration.md), then revoke the credential.

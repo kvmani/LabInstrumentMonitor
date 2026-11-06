@@ -1,0 +1,27 @@
+<!--
+  WinSW v2 service definition for the Lab Instrument Monitor collector (Windows 11 instrument PC).
+  Copy WinSW-x64.exe next to this file as labmon-collector.exe; install-collector.ps1 does this.
+  Code: C:\Program Files\labmon\current (a junction to releases\<version>).
+  State: C:\ProgramData\labmon\collector (config, 0600-equivalent token ACL, spool).
+  Status: not yet run on Windows (ADR 0007).
+-->
+<service>
+  <id>labmon-collector</id>
+  <name>Lab Instrument Monitor collector</name>
+  <description>Acquires simulated instrument readings, spools them durably and uploads them to the monitor (read-only, v1).</description>
+  <executable>%ProgramFiles%\labmon\current\venv\Scripts\labmon-collector.exe</executable>
+  <arguments>run --config "%ProgramData%\labmon\collector\collector.toml"</arguments>
+  <workingdirectory>%ProgramData%\labmon\collector</workingdirectory>
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>true</delayedAutoStart>
+  <!-- Ctrl+C first (the collector handles SIGINT and closes the spool), then kill -->
+  <stoptimeout>30 sec</stoptimeout>
+  <onfailure action="restart" delay="5 sec"/>
+  <onfailure action="restart" delay="30 sec"/>
+  <resetfailure>1 hour</resetfailure>
+  <logpath>%ProgramData%\labmon\collector\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>8</keepFiles>
+  </log>
+</service>

@@ -22,4 +22,6 @@
 
 - The rehearsal found that renaming a built virtualenv breaks its entry points; fixed by
   building in place.
-- Windows collector packaging and PITR remain open M3 work.
+- Windows collector packaging: ADR 0007. PITR: docs/operations/pitr.md (rehearsed on
+  disposable clusters). Releases keep a copy of `deploy/` so `--activate` works from the active
+  release.

@@ -23,5 +23,13 @@ connected staging host, verify hashes, transfer, and install with
 | react, react-dom (19.2) | UI | MIT | bundled |
 | echarts, zrender (6.1) | Charts | Apache-2.0 | bundled |
 
+Operator-supplied tools (not redistributed): **WinSW v2** (MIT, `WinSW-x64.exe`) wraps the
+Windows 11 collector as a service (ADR 0007). Use v2.12.0 or a later 2.x release from the
+project's official releases. Record its SHA-256 at download in the site's software register,
+and verify that hash before every install.
+
+The release bundle also carries `wheelhouse-win/` with the same hash-locked set for CPython
+3.12 `win_amd64`. On 2026-11-06 all 27 distributions resolved to Windows wheels (11 MB).
+
 Dev-only: pytest (MIT), ruff (MIT), mypy (MIT), playwright (Apache-2.0), vite (MIT),
 typescript (Apache-2.0), prettier (MIT). An SBOM (CycloneDX) is an M3 release deliverable.
