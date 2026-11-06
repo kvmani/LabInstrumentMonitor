@@ -58,6 +58,7 @@ from labmon.server.models import (
     ProfileRevision,
     Sample,
 )
+from labmon.server.rollup import mark_dirty
 from labmon.server.runs import RUN_EVENTS, apply_run_events, validate_run_event
 
 EARLIEST_ACCEPTED = datetime(2000, 1, 1, tzinfo=UTC)
@@ -572,6 +573,7 @@ def _ingest_tx(
     ]
     if samples:
         conn.execute(insert(Sample), samples)
+        mark_dirty(conn, ((r["channel_id"], r["event_time"]) for r in samples), now)
     if events:
         conn.execute(insert(AcquisitionEvent), events)
         apply_run_events(conn, [e for e in fresh if e.event_type in RUN_EVENTS], now)

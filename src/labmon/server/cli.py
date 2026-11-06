@@ -22,6 +22,9 @@ def main(argv: list[str] | None = None) -> int:
     serve = sub.add_parser("serve", help="run the API with uvicorn")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
+    worker = sub.add_parser("rollup-worker", help="maintain minute rollups (separate process)")
+    worker.add_argument("--once", action="store_true", help="drain the queue once and exit")
+    worker.add_argument("--interval", type=float, default=2.0)
     boot = sub.add_parser("bootstrap-dev", help="development-only demo data and collector config")
     boot.add_argument("--out", type=Path, default=Path(".devdata/collector"))
     boot.add_argument("--server-url", default="http://127.0.0.1:8000")
@@ -50,6 +53,13 @@ def main(argv: list[str] | None = None) -> int:
             log_level="info",
         )
         return 0
+    if args.command == "rollup-worker":
+        from labmon.server.db import make_engine
+        from labmon.server.worker import run_rollup_worker
+
+        return run_rollup_worker(
+            make_engine(settings.database_url, pool_size=2), args.once, args.interval
+        )
     if args.command == "bootstrap-dev":
         if not settings.dev_tools_allowed:
             print(

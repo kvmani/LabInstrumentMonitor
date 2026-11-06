@@ -15,6 +15,18 @@ field-verified, and no simulated pass is field acceptance.
 - **Environment used:** Ubuntu 24.04 container, CPython 3.12.3 (SQLite 3.45.1), PostgreSQL
   16.15, Node 22, Chromium from Playwright 1.63.0. All evidence is **simulated**.
 
+### Checkpoint 3 — M2 tranche 3 (in progress)
+
+- **Objective:** M2 gate items in order: (1) minute rollups with revisioned dirty-bucket
+  invalidation in the ingest transaction, a separate rollup worker, and a seeded 30-day furnace
+  fixture (one-sample peak + known dropout) proving the 30-day plot keeps both, with measured
+  query latency; (2) user runs and annotations with audit (RUN-01); (3) role matrix;
+  (4) durable exports with manifest; (5) spool lock, DSC onset, tensile 0.2 % yield.
+- **Validation plan:** rollup output equals on-the-fly raw aggregation for the same range;
+  late sample invalidates and is recomputed; worker never clears a newer invalidation;
+  30-day known answers (count, peak value and time, dropout interval) asserted from the API;
+  p50/p95 latency recorded; `scripts/check.sh --e2e` green after each step.
+
 ### Checkpoint 2 — owner requests of 2026-11-06 (simulated)
 
 | Request | Result | Evidence |

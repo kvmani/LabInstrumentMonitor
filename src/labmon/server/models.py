@@ -316,3 +316,40 @@ class Run(Base):
     end_reason: Mapped[str | None] = mapped_column(Text)
     run_metadata: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB)
     first_seen_at: Mapped[datetime] = mapped_column(TS)
+
+
+class SampleRollup1m(Base):
+    """Per-channel one-minute aggregate (UTC-aligned). A cache derived from ``sample``: it can be
+    rebuilt at any time and is never the source of truth."""
+
+    __tablename__ = "sample_rollup_1m"
+    __table_args__ = (PrimaryKeyConstraint("channel_id", "bucket"),)
+    channel_id: Mapped[str] = mapped_column(ForeignKey("channel.id"))
+    bucket: Mapped[datetime] = mapped_column(TS)
+    n: Mapped[int] = mapped_column(Integer)
+    n_valid: Mapped[int] = mapped_column(Integer)
+    n_uncertain: Mapped[int] = mapped_column(Integer)
+    v_sum: Mapped[float | None] = mapped_column(Double)
+    v_min: Mapped[float | None] = mapped_column(Double)
+    t_min: Mapped[datetime | None] = mapped_column(TS)
+    v_max: Mapped[float | None] = mapped_column(Double)
+    t_max: Mapped[datetime | None] = mapped_column(TS)
+    v_first: Mapped[float | None] = mapped_column(Double)
+    v_last: Mapped[float | None] = mapped_column(Double)
+    t_first: Mapped[datetime] = mapped_column(TS)
+    t_last: Mapped[datetime] = mapped_column(TS)
+    gap_start: Mapped[datetime | None] = mapped_column(TS)  # largest internal gap in the minute
+    gap_s: Mapped[float | None] = mapped_column(Double)
+    computed_at: Mapped[datetime] = mapped_column(TS)
+
+
+class RollupDirty(Base):
+    """Minute buckets invalidated by ingest. ``revision`` increases on every invalidation so a
+    worker deletes only the revision it actually recomputed."""
+
+    __tablename__ = "rollup_dirty"
+    __table_args__ = (PrimaryKeyConstraint("channel_id", "bucket"),)
+    channel_id: Mapped[str] = mapped_column(Text)
+    bucket: Mapped[datetime] = mapped_column(TS)
+    revision: Mapped[int] = mapped_column(BigInteger)
+    marked_at: Mapped[datetime] = mapped_column(TS)

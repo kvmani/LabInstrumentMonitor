@@ -25,6 +25,7 @@ from sqlalchemy import Connection, Engine, desc, func, select, text
 
 from labmon.contracts.envelope import format_utc
 from labmon.server.models import AcquisitionEvent, Channel, Instrument, Sample
+from labmon.server.rollup import combine, gaps_from_minutes, minute_rows
 
 BUCKET_LADDER_S = (
     1,
@@ -110,6 +111,25 @@ def gap_threshold(cadence_s: float) -> float:
     return max(3.0 * cadence_s, 5.0)
 
 
+def _neighbours(
+    conn: Connection, channel_id: str, start: datetime, end: datetime
+) -> tuple[datetime | None, datetime | None]:
+    """Last sample time before the range and first at/after its end (index lookups)."""
+    before = conn.execute(
+        select(Sample.event_time)
+        .where(Sample.channel_id == channel_id, Sample.event_time < start)
+        .order_by(desc(Sample.event_time))
+        .limit(1)
+    ).scalar()
+    after = conn.execute(
+        select(Sample.event_time)
+        .where(Sample.channel_id == channel_id, Sample.event_time >= end)
+        .order_by(Sample.event_time)
+        .limit(1)
+    ).scalar()
+    return before, after
+
+
 def compute_gaps(
     conn: Connection, ch: Any, start: datetime, end: datetime, now: datetime
 ) -> list[dict[str, Any]]:
@@ -186,6 +206,40 @@ def channel_series(
     ch = conn.execute(select(Channel).where(Channel.id == channel_id)).one()
     inst = conn.execute(select(Instrument.simulated).where(Instrument.id == ch.instrument_id)).one()
     budget = min(max_points or limits.max_buckets, limits.max_buckets)
+    # an explicit point budget (e.g. a 60-point sparkline) also caps raw mode
+    raw_limit = (
+        limits.raw_point_limit if max_points is None else min(limits.raw_point_limit, max_points)
+    )
+    width = choose_bucket(end - start, budget)
+    if width >= 60:
+        # long window: minute rollups (+ raw for dirty and edge minutes) instead of raw scans
+        view = minute_rows(conn, ch.id, ch.data_type, start, end)
+        total = sum(r.n for r in view.rows)
+        if total > raw_limit:
+            before, after = _neighbours(conn, ch.id, start, end)
+            snapshot = conn.execute(text("SELECT pg_snapshot_xmin(pg_current_snapshot())")).scalar()
+            return {
+                "channel": _channel_meta(ch),
+                "instrument_id": ch.instrument_id,
+                "simulated": inst.simulated,
+                "range": {
+                    "start": format_utc(start),
+                    "end": format_utc(end),
+                    "interval": "[start,end)",
+                },
+                "server_time": format_utc(now),
+                "sample_count": total,
+                "data_revision": f"snapshot:{snapshot}",
+                "gaps": gaps_from_minutes(
+                    view.rows, gap_threshold(ch.expected_cadence_s), before, after, start, end, now
+                ),
+                "events": _events(conn, ch.instrument_id, start, end),
+                "mode": "bucket",
+                "bucket_s": width,
+                "aggregation": "rollup_1m",
+                "rebuilding_minutes": view.rebuilding_minutes,
+                "buckets": combine(view.rows, width),
+            }
     count = conn.execute(
         select(func.count())
         .select_from(Sample)
@@ -207,16 +261,12 @@ def channel_series(
         "gaps": compute_gaps(conn, ch, start, end, now),
         "events": _events(conn, ch.instrument_id, start, end),
     }
-    # an explicit point budget (e.g. a 60-point sparkline) also caps raw mode
-    raw_limit = (
-        limits.raw_point_limit if max_points is None else min(limits.raw_point_limit, max_points)
-    )
     if count <= raw_limit:
         out["mode"] = "raw"
         out["points"] = _raw_points(conn, ch, start, end)
     else:
-        width = choose_bucket(end - start, budget)
         out["mode"] = "bucket"
+        out["aggregation"] = "raw_on_demand"
         out["bucket_s"] = width
         out["buckets"] = _buckets(conn, ch, start, end, width)
     return out
