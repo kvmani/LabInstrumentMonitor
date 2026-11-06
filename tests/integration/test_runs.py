@@ -22,6 +22,7 @@ from labmon.server.app import create_app
 from labmon.server.bootstrap import (
     DILATOMETER_SEED,
     DSC_SEED,
+    FURNACE_SEED,
     UTM_SEED,
     InstrumentSeed,
     assign,
@@ -226,3 +227,24 @@ def test_missed_run_end_is_closed_by_the_next_run(
     assert not old["active"] and new["active"]
     s = rig.client.get(f"/api/v1/runs/{old['id']}").json()["analysis"]["summary"]
     assert s["uts_mpa"] is None and "fracture not observed" in s["reasons"]
+
+
+def test_furnace_soak_tolerance_known_answers(engine: Engine, db_url: str, tmp_path: Path) -> None:
+    rig = Rig(engine, db_url, tmp_path, at_ms(ANCHOR_MS + 250_000), (FURNACE_SEED,))
+    rig.run_for(3700, upload_every_s=300)  # through the ramp and the whole 1800 s soak
+    sign_in(rig.client)
+    run = runs(rig.client, "furnace-01")[0]
+    tol = rig.client.get(f"/api/v1/runs/{run['id']}").json()["tolerance"]
+    assert tol["kind"] == "soak_tolerance" and tol["rules"]["tolerance_c"] == 5.0
+    assert tol["soak"]["duration_s"] == pytest.approx(1800.0, abs=2)
+    assert tol["coverage"] == pytest.approx(1.0, abs=0.002)
+    # noise-free model: 60 s below (lag), 275 s above (overshoot), 1465 s within
+    assert tol["within_s"] == pytest.approx(1465, abs=25)
+    assert tol["out_s"] == pytest.approx(335, abs=25)
+    below, above = tol["excursions"]
+    assert below["direction"] == "below" and below["duration_s"] == pytest.approx(60, abs=10)
+    # the overshoot tail crosses 855 C at about -0.03 C/s, so 0.3 C noise flaps across the
+    # limit for tens of seconds; the 10 s merge rule keeps that as one excursion (>= 275 s)
+    assert above["direction"] == "above" and 265 <= above["duration_s"] <= 380
+    assert above["max_deviation_c"] == pytest.approx(7.15, abs=1.0)
+    assert below["start"] < above["start"]

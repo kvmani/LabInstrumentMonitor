@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import Connection, func, select
@@ -369,4 +369,89 @@ def dsc(
             "exotherm": exo,
             "segments": {s: segs.count(s) for s in ("heating", "cooling", "isothermal")},
         },
+    }
+
+
+# --- furnace soak tolerance (ANA-01) ---------------------------------------------------------
+
+SOAK_CODE = 2  # furnace program phase "Soak"
+MIN_EXCURSION_S = 10.0
+DWELL_S = 10.0
+
+
+def soak_tolerance(frames: list[Frame], tolerance_c: float, max_hold_s: float) -> dict[str, Any]:
+    """Time within ±tolerance of the recorded setpoint during the soak, and excursions.
+
+    Rules (documented in the response):
+
+    * Only frames whose validated phase channel reads Soak are evaluated; process value and
+      setpoint are paired by acquisition frame (same read), so no time alignment is needed.
+    * A valid frame represents the time until the next valid soak frame, held for at most
+      ``max_hold_s`` (the channel freshness window). Gaps, bad-quality and missing pairs are
+      *unobserved*, never counted as in or out of tolerance.
+    * Excursions are runs of out-of-tolerance frames on the same side; runs separated by less
+      than ``DWELL_S`` of in-tolerance time merge; excursions shorter than ``MIN_EXCURSION_S``
+      are not listed (their time still counts as out of tolerance).
+    """
+    soak = [f for f in frames if f.values.get("phase", (None, ""))[0] == SOAK_CODE]
+    rules = {
+        "tolerance_c": tolerance_c,
+        "pairing": "same acquisition frame (pv, recorded sp)",
+        "evaluated_phase": "Soak",
+        "max_hold_s": max_hold_s,
+        "min_excursion_s": MIN_EXCURSION_S,
+        "merge_dwell_s": DWELL_S,
+    }
+    if not soak:
+        return {"kind": "soak_tolerance", "rules": rules, "soak": None, "excursions": []}
+    start, end = soak[0].t, soak[-1].t
+    valid: list[tuple[datetime, float]] = []  # (time, deviation)
+    for f in soak:
+        pv, sp = f.good("pv"), f.good("sp")
+        if pv is not None and sp is not None:
+            valid.append((f.t, pv - sp))
+    steps = sorted((b.t - a.t).total_seconds() for a, b in zip(soak, soak[1:], strict=False))
+    last_hold = min(steps[len(steps) // 2] if steps else max_hold_s, max_hold_s)
+    within = out = 0.0
+    spans: list[list[Any]] = []  # [start, end, side, max |dev|, at, dev]
+    for (t, dev), nxt in zip(valid, valid[1:] + [(None, 0.0)], strict=True):
+        hold = last_hold if nxt[0] is None else min((nxt[0] - t).total_seconds(), max_hold_s)
+        ok = abs(dev) <= tolerance_c
+        if ok:
+            within += hold
+            continue
+        out += hold
+        side = "above" if dev > 0 else "below"
+        stop = t + timedelta(seconds=hold)
+        if spans and spans[-1][2] == side and (t - spans[-1][1]).total_seconds() < DWELL_S:
+            sp_ = spans[-1]
+            sp_[1] = stop
+            if abs(dev) > sp_[3]:
+                sp_[3], sp_[4], sp_[5] = abs(dev), t, dev
+        else:
+            spans.append([t, stop, side, abs(dev), t, dev])
+    duration = (end - start).total_seconds() + last_hold
+    observed = within + out
+    excursions = [
+        {
+            "start": format_utc(a),
+            "end": format_utc(b),
+            "duration_s": round((b - a).total_seconds(), 1),
+            "direction": side,
+            "max_deviation_c": round(d, 2),
+            "at": format_utc(at),
+        }
+        for a, b, side, _, at, d in spans
+        if (b - a).total_seconds() >= MIN_EXCURSION_S
+    ]
+    return {
+        "kind": "soak_tolerance",
+        "rules": rules,
+        "soak": {"start": format_utc(start), "end": format_utc(end), "duration_s": duration},
+        "within_s": round(within, 1),
+        "out_s": round(out, 1),
+        "unobserved_s": round(max(0.0, duration - observed), 1),
+        "coverage": round(observed / duration, 4) if duration else None,
+        "within_fraction_of_observed": round(within / observed, 4) if observed else None,
+        "excursions": excursions,
     }

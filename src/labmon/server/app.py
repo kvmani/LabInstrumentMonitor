@@ -562,6 +562,7 @@ def create_app(
             }
             end, over = effective_end(run, at)
             analysis_out: dict[str, Any] | None = None
+            tolerance_out: dict[str, Any] | None = None
             try:
                 if display["analysis"] == "tensile":
                     frames = load_frames(
@@ -590,6 +591,29 @@ def create_app(
                         display["sign_convention"],
                         float(mass) if isinstance(mass, int | float) else None,
                     )
+                elif display.get("tolerance") and display.get("state_channel") == "phase":
+                    frames = load_frames(
+                        conn,
+                        run.instrument_id,
+                        channels,
+                        run.started_at,
+                        end + timedelta(milliseconds=1),
+                    )
+                    window = max(
+                        3.0
+                        * float(
+                            conn.execute(
+                                select(Channel.expected_cadence_s).where(
+                                    Channel.id == channels.get("pv", "")
+                                )
+                            ).scalar()
+                            or 1.0
+                        ),
+                        5.0,
+                    )
+                    tolerance_out = analysis.soak_tolerance(
+                        frames, float(display["tolerance"]), window
+                    )
             except analysis.TooLarge as exc:
                 raise HTTPException(413, str(exc)) from exc
         return {
@@ -597,6 +621,7 @@ def create_app(
             "run": view,
             "display": display,
             "analysis": analysis_out,
+            "tolerance": tolerance_out,
         }
 
     @app.get("/api/v1/instruments/{instrument_id}/export.csv")

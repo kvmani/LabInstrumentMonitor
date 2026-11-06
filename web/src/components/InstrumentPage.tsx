@@ -4,7 +4,7 @@ import { formatNumber, formatValue, humanize } from "../format";
 import { useNow, usePolling } from "../hooks";
 import { acquisitionReason } from "../status";
 import { formatAge, formatDuration, formatTime, fromLocalInput, isoUtc, toLocalInput } from "../time";
-import type { AcqEvent, AnnotationView, ChannelStatus, InstrumentStatus, PanelDef, RunDetail, RunView, Series } from "../types";
+import type { AcqEvent, AnnotationView, ChannelStatus, InstrumentStatus, PanelDef, RunDetail, RunView, Series, SoakTolerance } from "../types";
 import { AcqBadge, CollectorBadge, RunBadge, SimBadge } from "./Badges";
 import { ConnectionBanner } from "./ConnectionBanner";
 import { type PanelScale, TimePanels } from "./TimePanels";
@@ -147,11 +147,20 @@ function SeriesSummary({ s, ch, tz, tzLabel }: { s: Series; ch: ChannelStatus; t
     }
   }
   const gapTotal = s.gaps.reduce((a, g) => a + g.duration_s, 0);
+  let sum = 0;
+  if (s.mode === "raw") for (const p of s.points ?? []) sum += p[1] ?? 0;
+  else for (const b of s.buckets ?? []) sum += b.mean !== null ? b.mean * b.valid_count : 0;
+  const mean = valid > 0 && ch.data_type === "float" ? sum / valid : null;
+  const span = (Math.min(Date.parse(s.range.end), Date.parse(s.server_time)) - Date.parse(s.range.start)) / 1000;
+  const expected = span > 0 ? span / ch.expected_cadence_s : 0;
+  const coverage = expected > 0 ? Math.min(1, valid / expected) : null;
   return (
     <p className="summary" data-testid="series-summary">
       <strong>{ch.name}:</strong> {n.toLocaleString()} samples ({valid.toLocaleString()} valid{n - valid > 0 ? `, ${(n - valid).toLocaleString()} bad` : ""})
       {max && ` · max ${formatNumber(ch, max[0])} ${ch.unit} at ${formatTime(max[1], tz, true)} ${tzLabel}`}
-      {min && ` · min ${formatNumber(ch, min[0])} ${ch.unit} at ${formatTime(min[1], tz, true)}`} ·{" "}
+      {min && ` · min ${formatNumber(ch, min[0])} ${ch.unit} at ${formatTime(min[1], tz, true)}`}
+      {mean !== null && ` · mean ${formatNumber(ch, mean)} ${ch.unit} (valid samples)`}
+      {coverage !== null && ` · coverage ${(coverage * 100).toFixed(1)} % of expected ${ch.expected_cadence_s} s cadence`} ·{" "}
       {s.gaps.length === 0 ? "no gaps" : `${s.gaps.length} gap${s.gaps.length > 1 ? "s" : ""} (${formatDuration(gapTotal)} without data)`} ·{" "}
       {s.mode === "raw" ? "raw samples" : `aggregated in ${formatDuration(s.bucket_s ?? 0)} buckets (band = min–max, line = mean)`}
       {s.rebuilding_minutes ? ` · ${s.rebuilding_minutes} recent minute${s.rebuilding_minutes > 1 ? "s" : ""} aggregated from raw while rollups catch up` : ""}
@@ -533,6 +542,7 @@ function RunAnalysisView({ detail, s, tz, tzLabel, theme, canRecord, onChanged }
           <p className="sub">Peak areas use a straight baseline across the peak window and are estimates for rehearsal, not certified results.</p>
         </>
       )}
+      {detail.tolerance && <ToleranceView t={detail.tolerance} tz={tz} tzLabel={tzLabel} />}
       {a && <XYChart title={`${run.name} · ${a.y.label} vs ${a.x.label}${run.simulated ? " [SIMULATED]" : ""}`} analysis={a} tz={tz} tzLabel={tzLabel} theme={theme} markers={markers} />}
       <h3 style={{ margin: "14px 0 6px" }}>Time series for this run</h3>
       {windowSeries.data ? (
@@ -556,6 +566,54 @@ function RunAnalysisView({ detail, s, tz, tzLabel, theme, canRecord, onChanged }
         <summary>Run metadata</summary>
         <pre className="mono sub">{JSON.stringify(run.metadata, null, 2)}</pre>
       </details>
+    </div>
+  );
+}
+
+function ToleranceView({ t, tz, tzLabel }: { t: SoakTolerance; tz: string; tzLabel: string }) {
+  if (!t.soak) return <p className="sub">No soak segment in this run yet.</p>;
+  const pct = (v: number | null | undefined) => (typeof v === "number" ? `${(v * 100).toFixed(1)} %` : "—");
+  const tol = t.rules.tolerance_c as number;
+  return (
+    <div data-testid="soak-tolerance">
+      <div className="metrics">
+        <Metric label={`Within ±${tol} °C`} value={pct(t.within_fraction_of_observed)} hint={`${formatDuration(t.within_s ?? 0)} of observed soak`} />
+        <Metric label="Out of tolerance" value={formatDuration(t.out_s ?? 0)} hint={`${t.excursions.length} excursion${t.excursions.length === 1 ? "" : "s"} ≥ ${String(t.rules.min_excursion_s)} s`} />
+        <Metric label="Unobserved" value={formatDuration(t.unobserved_s ?? 0)} hint={`coverage ${pct(t.coverage)}`} />
+        <Metric label="Soak" value={formatDuration(t.soak.duration_s)} hint={`${formatTime(t.soak.start, tz, false)} – ${formatTime(t.soak.end, tz, false)} ${tzLabel}`} />
+      </div>
+      {t.excursions.length > 0 && (
+        <div className="table-wrap" style={{ marginBottom: 12 }}>
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Excursion ({tzLabel})</th>
+                <th scope="col">Direction</th>
+                <th scope="col">Duration</th>
+                <th scope="col">Max deviation</th>
+              </tr>
+            </thead>
+            <tbody>
+              {t.excursions.map((e) => (
+                <tr key={e.start}>
+                  <td className="mono sub">
+                    {formatTime(e.start, tz, false)} – {formatTime(e.end, tz, false)}
+                  </td>
+                  <td>{e.direction === "above" ? "▲ above" : "▼ below"}</td>
+                  <td className="num">{formatDuration(e.duration_s)}</td>
+                  <td className="num">
+                    {e.max_deviation_c > 0 ? "+" : ""}
+                    {e.max_deviation_c.toFixed(2)} °C at {formatTime(e.at, tz, false)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="sub">
+        Rules: process value and recorded setpoint paired by acquisition frame during the Soak phase; each sample holds until the next for at most {String(t.rules.max_hold_s)} s; gaps and bad samples are unobserved; excursions separated by less than {String(t.rules.merge_dwell_s)} s merge.
+      </p>
     </div>
   );
 }

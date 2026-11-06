@@ -149,11 +149,33 @@ export interface XYAnalysis {
   geometry?: Record<string, unknown> | null;
 }
 
+export interface Excursion {
+  start: string;
+  end: string;
+  duration_s: number;
+  direction: "above" | "below";
+  max_deviation_c: number;
+  at: string;
+}
+
+export interface SoakTolerance {
+  kind: "soak_tolerance";
+  rules: Record<string, unknown>;
+  soak: { start: string; end: string; duration_s: number } | null;
+  within_s?: number;
+  out_s?: number;
+  unobserved_s?: number;
+  coverage?: number | null;
+  within_fraction_of_observed?: number | null;
+  excursions: Excursion[];
+}
+
 export interface RunDetail {
   server_time: string;
   run: RunView;
   display: Display;
   analysis: XYAnalysis | null;
+  tolerance: SoakTolerance | null;
 }
 
 export interface AcqEvent {
