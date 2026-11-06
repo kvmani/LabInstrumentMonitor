@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 import secrets
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import Connection, Engine, insert, select, update
@@ -269,7 +269,14 @@ def bootstrap_dev(
         revs = []
         for s in seeds:
             rev = ensure_instrument(conn, DEMO_LAB[0], s, actor="bootstrap-dev")
-            assign(conn, collector_id, s.instrument_id, now, "development bootstrap")
+            # dev assignments start 31 days back so rehearsal playback (backfill) is accepted
+            assign(
+                conn,
+                collector_id,
+                s.instrument_id,
+                now - timedelta(days=31),
+                "development bootstrap",
+            )
             revs.append((s, rev))
         has_cred = (
             conn.execute(

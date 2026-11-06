@@ -23,6 +23,8 @@ export interface ChannelStatus {
   display_precision: number;
   enum_labels: Record<string, string> | null;
   expected_cadence_s: number;
+  display_format: "fixed" | "scientific";
+  note: string | null;
   freshness_window_s: number;
   fresh: boolean;
   latest: SampleView | null;
@@ -75,6 +77,72 @@ export interface InstrumentStatus {
     last_known_at?: string | null;
   };
   channels: ChannelStatus[];
+  display: Display;
+  active_run: RunView | null;
+}
+
+export interface PanelDef {
+  key: string;
+  title: string;
+  channels: string[];
+  scale: "linear" | "log";
+  log_allowed: boolean;
+  tolerance_of: string | null;
+}
+
+export interface Display {
+  profile_revision_id: string | null;
+  profile_revision: number | null;
+  title: string | null;
+  panels: PanelDef[];
+  analysis: "tensile" | "dsc" | null;
+  sign_convention: string | null;
+  cadence_note: string | null;
+  tolerance: number | null;
+  state_channel: string | null;
+}
+
+export interface RunView {
+  id: string;
+  instrument_id: string;
+  run_key: string;
+  name: string;
+  kind: string;
+  source: string;
+  simulated: boolean;
+  started_at: string;
+  planned_end_at: string | null;
+  ended_at: string | null;
+  end_reason: string | null;
+  active: boolean;
+  metadata: Record<string, unknown>;
+}
+
+export interface XYAnalysis {
+  kind: "tensile" | "dsc";
+  x: { label: string; unit: string; key: string };
+  y: { label: string; unit: string; key: string };
+  sign_convention?: string | null;
+  point_fields: string[];
+  /** [x, y, time, state|segment] or null for a break */
+  points: ([number, number, string, number | string] | null)[];
+  summary: Record<string, unknown>;
+  geometry?: Record<string, unknown> | null;
+}
+
+export interface RunDetail {
+  server_time: string;
+  run: RunView;
+  display: Display;
+  analysis: XYAnalysis | null;
+}
+
+export interface AcqEvent {
+  type: string;
+  at: string;
+  received_at: string;
+  detail: Record<string, unknown> | null;
+  identity: string;
 }
 
 export interface Gap {
@@ -115,6 +183,8 @@ export interface Series {
     role: string;
     display_precision: number;
     enum_labels: Record<string, string> | null;
+    display_format: "fixed" | "scientific";
+    note: string | null;
     expected_cadence_s: number;
     gap_threshold_s: number;
   };

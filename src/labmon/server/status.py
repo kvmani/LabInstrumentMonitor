@@ -110,6 +110,17 @@ def _latest(
     return conn.execute(q).first()
 
 
+def _backlog_age(hb: dict[str, Any]) -> float:
+    try:
+        oldest = datetime.fromisoformat(
+            str(hb["oldest_pending_capture_time"]).replace("Z", "+00:00")
+        )
+        taken = datetime.fromisoformat(str(hb["collector_time"]).replace("Z", "+00:00"))
+    except (KeyError, TypeError, ValueError):
+        return 0.0
+    return max(0.0, (taken - oldest).total_seconds())
+
+
 def collector_view(c: Any, now: datetime, cfg: StatusConfig) -> dict[str, Any]:
     if c is None:
         return {"id": None, "connectivity": "never_seen", "last_heartbeat_at": None}
@@ -134,6 +145,9 @@ def collector_view(c: Any, now: datetime, cfg: StatusConfig) -> dict[str, Any]:
         "clock_offset_s": offset,
         "unacknowledged": hb.get("unacknowledged"),
         "oldest_pending_capture_time": hb.get("oldest_pending_capture_time"),
+        # Age of the oldest unacknowledged record when the heartbeat was taken (collector clock
+        # on both sides). Records in flight are normal; only an old backlog proves a delay.
+        "backlog_age_s": _backlog_age(hb),
         "upload_fault": hb.get("upload_fault"),
         "sampling": hb.get("sampling"),
         "software_version": hb.get("software_version"),
@@ -323,7 +337,7 @@ def _acquisition_state(
         }
     if online:
         unacked = coll.get("unacknowledged") or 0
-        if coll.get("sampling") and unacked > 0:
+        if coll.get("sampling") and unacked > 0 and coll.get("backlog_age_s", 0) > 5.0:
             return {
                 **base,
                 "state": "stale",

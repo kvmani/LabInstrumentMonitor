@@ -22,15 +22,40 @@ uv sync --frozen --extra dev
 export LABMON_DATABASE_URL=postgresql+psycopg://labmon@127.0.0.1:55432/labmon
 export LABMON_ENV=development         # enables bootstrap-dev and /api/docs; cookies not Secure
 .venv/bin/labmon-server migrate
-.venv/bin/labmon-server bootstrap-dev --password 'choose-a-dev-password'
+.venv/bin/labmon-server bootstrap-dev --password 'choose-a-dev-password' --with-dsc
 .venv/bin/labmon-server serve --port 8000
 .venv/bin/labmon-collector run --config .devdata/collector/collector.toml
 ```
 
-`bootstrap-dev` creates lab `lab-demo`, instrument `furnace-01` (profile `sim-furnace`, seed 42,
-revision `furnace-01-r1`), collector `col-bay1-01` with a fresh credential in
-`.devdata/collector/collector.token` (mode 0600), and user `scientist`. Add `--with-ambient` for
-the ambient smoke fixture. It refuses to run when `LABMON_ENV=production`.
+`bootstrap-dev` creates lab `lab-demo`, the default fleet — `furnace-01` (`sim-furnace`),
+`utm-01` (`sim-utm`) and `dil-01` (`sim-dilatometer`) — collector `col-bay1-01` with a fresh
+credential in `.devdata/collector/collector.token` (mode 0600), and user `scientist`. Add
+`--with-dsc` for the opt-in DSC (`dsc-01`) and `--with-ambient` for the ambient smoke fixture.
+Development assignments start 31 days back so rehearsal playback is accepted. It refuses to run
+when `LABMON_ENV=production`.
+
+## Rehearsal history (playback)
+
+```bash
+# stop the live collector first: one process owns the spool
+.venv/bin/labmon-collector backfill --config .devdata/collector/collector.toml --hours 3
+.venv/bin/labmon-collector run --config .devdata/collector/collector.toml   # uploads the backlog
+```
+
+Playback runs the real acquisition code on a virtual clock from `now − hours` to now, with the
+original (past) timestamps. Its `acquisition_started` events carry `mode = historical_playback`,
+so rehearsal data is distinguishable from live acquisition in the Diagnostics event list and in
+CSV/event exports. Three hours produce roughly 27 completed tensile tests, three dilatometer runs,
+a furnace heat treatment and four DSC scans. It is not a recovery mechanism.
+
+## What to look at
+
+| Instrument | Overview | Runs & XY analysis |
+| --- | --- | --- |
+| Furnace | PV with stepped setpoint and ±5 °C tolerance band, phase strip, overshoot at soak start | one run per heat treatment (time series of the run) |
+| UTM | force and extension at 5 Hz during tests, test-state strip | stress–strain curve, UTS ≈ 480 MPa at 18 % strain, fracture after UTS |
+| Dilatometer | log-scale pressure (pump-down, outgassing burst, scripted gauge error), temperature, signed ΔL | run time series |
+| DSC | sample and programmed temperature, heat flow (exo up) | heat flow vs sample temperature: endotherm ≈ 158.5 °C (−286 mJ), exotherm ≈ 153.5 °C |
 
 When running as root (containers), the cluster runs as the `postgres` account; the cluster
 directory and its parents must be traversable by that account, otherwise choose
@@ -63,7 +88,8 @@ pkill -f "labmon-collector run"; pkill -f "labmon-server serve"
 ## Tests
 
 ```bash
-.venv/bin/ruff check src tests && .venv/bin/ruff format --check src tests && .venv/bin/mypy
+scripts/check.sh                             # the whole local gate (CI is manual-dispatch only)
+scripts/check.sh --e2e                       # plus real-process and browser suites
 .venv/bin/pytest tests/unit                  # no database, virtual clocks, no sleeps
 .venv/bin/pytest tests/integration           # real PostgreSQL 16, one cloned DB per test
 .venv/bin/pytest tests/e2e                   # real processes + Chromium; needs web/dist

@@ -130,7 +130,23 @@ def test_delivery_delayed_and_source_unavailable(
 ) -> None:
     send(client, world, frames(Seq(), t0, 1))
     fake_now.advance(20)
-    heartbeat(client, world.token, fake_now.t, unacknowledged=40)
+    # records merely in flight (oldest captured 1 s before the heartbeat) are not a delay
+    heartbeat(
+        client,
+        world.token,
+        fake_now.t,
+        unacknowledged=12,
+        oldest_pending_capture_time=format_utc(fake_now.t - timedelta(seconds=1)),
+    )
+    assert status(client)["acquisition"]["reason_code"] == "collector_online_no_new_readings"
+    # an old backlog is evidence that sampling continues but delivery is delayed
+    heartbeat(
+        client,
+        world.token,
+        fake_now.t,
+        unacknowledged=40,
+        oldest_pending_capture_time=format_utc(fake_now.t - timedelta(seconds=19)),
+    )
     assert status(client)["acquisition"]["reason_code"] == "collector_sampling_delivery_delayed"
     heartbeat(
         client,

@@ -57,7 +57,14 @@ def running(stack: Stack) -> Stack:
     return stack
 
 
-def test_fleet_to_history_csv_and_failure_states(running: Stack, tmp_path: Path) -> None:
+def login(page, base: str) -> None:  # type: ignore[no-untyped-def]
+    page.goto(base + "/")
+    page.get_by_label("Username").fill("scientist")
+    page.get_by_label("Password").fill(PASSWORD)
+    page.get_by_role("button", name="Sign in").click()
+
+
+def test_dashboard_workspace_csv_and_failure_states(running: Stack, tmp_path: Path) -> None:
     stack = running
     with playwright.sync_playwright() as pw:
         browser = pw.chromium.launch()
@@ -76,49 +83,59 @@ def test_fleet_to_history_csv_and_failure_states(running: Stack, tmp_path: Path)
                 else None
             ),
         )
+        login(page, stack.base)
 
-        page.goto(stack.base + "/")
-        page.get_by_label("Username").fill("scientist")
-        page.get_by_label("Password").fill(PASSWORD)
-        page.get_by_role("button", name="Sign in").click()
+        # dashboard: one card per default-fleet instrument, all simulated
+        cards = page.get_by_test_id("fleet-cards")
+        cards.wait_for()
+        furnace = page.get_by_test_id("card-furnace-01")
+        for iid in ("furnace-01", "utm-01", "dil-01"):
+            card = page.get_by_test_id(f"card-{iid}")
+            assert "SIMULATED" in card.inner_text()
+            wait_for(lambda c=card: "Receiving" in c.inner_text(), 20, f"{iid} receiving")
+        assert "°C" in furnace.inner_text()
+        assert "Pa" in page.get_by_test_id("card-dil-01").inner_text()
+        assert "kN" in page.get_by_test_id("card-utm-01").inner_text()
+        spare = page.get_by_test_id("card-furnace-02")
+        assert "Waiting" in spare.inner_text()
+        wait_for(lambda: page.locator(".spark polyline").count() >= 3, 20, "sparklines")
+        assert page.get_by_test_id("kpi-all").inner_text().startswith("4")
+        shot(page, "dashboard-1366x768")
 
+        # KPI filter and table layout
+        page.get_by_test_id("kpi-receiving").click()
+        assert page.get_by_test_id("card-furnace-02").count() == 0
+        page.get_by_test_id("kpi-receiving").click()
+        page.get_by_role("button", name="Table", exact=True).click()
         row = page.get_by_test_id("fleet-row-furnace-01")
-        row.wait_for()
-        assert "SIMULATED" in row.inner_text()
-        wait_for(lambda: "Receiving" in row.inner_text(), 15, "Receiving badge in fleet")
-        assert "°C" in row.inner_text()
-        spare = page.get_by_test_id("fleet-row-furnace-02")
-        assert "Waiting" in spare.inner_text() and "no collector assigned" in spare.inner_text()
-        shot(page, "fleet-1366x768")
+        assert "Receiving" in row.inner_text()
+        shot(page, "fleet-table-1366x768")
+        page.get_by_role("button", name="Cards", exact=True).click()
 
         # two interactions from the fleet to the last 24 hours
-        row.get_by_role("link", name="Heat-treatment furnace F-01", exact=True).click()
+        page.get_by_test_id("card-furnace-01").click()
         page.get_by_role("button", name="24 h", exact=True).click()
         page.get_by_test_id("history-chart").locator("canvas").first.wait_for()
         assert "Live" in page.get_by_test_id("live-state").inner_text()
         page.get_by_role("button", name="15 min", exact=True).click()
-        page.get_by_test_id("series-summary").wait_for()
-        wait_for(
-            lambda: "no gaps" in page.get_by_test_id("series-summary").inner_text(),
-            10,
-            "summary without gaps",
-        )
+        summary = page.get_by_test_id("series-summary")
+        summary.wait_for()
+        wait_for(lambda: "no gaps" in summary.inner_text(), 10, "summary without gaps")
+        assert " IST" in summary.inner_text()
         assert page.get_by_test_id("process-state").inner_text() in {
             "Idle",
             "Ramp",
             "Soak",
             "Cooldown",
         }
-        assert " IST" in page.get_by_test_id("series-summary").inner_text()
-        shot(page, "instrument-live-1366x768")
+        shot(page, "furnace-overview-1366x768")
 
-        # zooming pauses live follow explicitly; Resume live is always offered
+        # zoom pauses live follow; Resume live is offered
         page.get_by_role("button", name="Zoom in").click()
         assert "Paused" in page.get_by_test_id("live-state").inner_text()
         page.get_by_role("button", name="Resume live").click()
         assert "Live" in page.get_by_test_id("live-state").inner_text()
 
-        # CSV of the displayed range
         with page.expect_download() as dl:
             page.get_by_test_id("csv-link").click()
         download = dl.value
@@ -127,17 +144,32 @@ def test_fleet_to_history_csv_and_failure_states(running: Stack, tmp_path: Path)
         assert rows and {r["simulated"] for r in rows} == {"true"}
         assert {r["channel_key"] for r in rows} == {"pv", "sp", "phase"}
 
-        # UTC toggle changes the axis labelling without refetching a different window
         page.get_by_role("button", name="UTC", exact=True).click()
-        wait_for(
-            lambda: " UTC" in page.get_by_test_id("series-summary").inner_text(), 5, "UTC labels"
-        )
+        wait_for(lambda: " UTC" in summary.inner_text(), 5, "UTC labels")
         page.get_by_role("button", name="IST", exact=True).click()
 
-        for w, h, name in ((1920, 1080, "wide"), (1024, 768, "tablet")):
+        # diagnostics and runs tabs
+        page.get_by_test_id("tab-diagnostics").click()
+        page.get_by_test_id("diagnostics").wait_for()
+        assert "Collector online" in page.get_by_test_id("diagnostics").inner_text()
+        wait_for(
+            lambda: "acquisition started" in page.get_by_test_id("events-table").inner_text(),
+            10,
+            "events listed",
+        )
+        page.get_by_test_id("tab-runs").click()
+        page.wait_for_timeout(500)
+
+        # dilatometer: log-scale pressure panel and signed length change tile
+        page.goto(stack.base + "/#/instrument/dil-01")
+        page.get_by_test_id("history-chart").locator("canvas").first.wait_for()
+        assert page.get_by_label("Chamber pressure axis").input_value() == "log"
+        shot(page, "dilatometer-overview-1366x768")
+
+        for w, h, name in ((1920, 1080, "wide"), (1024, 768, "tablet"), (390, 844, "phone")):
             page.set_viewport_size({"width": w, "height": h})
-            page.wait_for_timeout(500)
-            shot(page, f"instrument-{name}-{w}x{h}")
+            page.wait_for_timeout(400)
+            shot(page, f"dilatometer-{name}-{w}x{h}")
         page.set_viewport_size({"width": 1366, "height": 768})
 
         # closing the browser does not affect collection
@@ -146,14 +178,11 @@ def test_fleet_to_history_csv_and_failure_states(running: Stack, tmp_path: Path)
         time.sleep(4)
         assert sample_count(stack) > n
 
-        # stale display after the collector stops
+        # stale display after the collector stops, then the API going away
         context = browser.new_context(viewport={"width": 1366, "height": 768})
         page = context.new_page()
-        page.goto(stack.base + "/")
-        page.get_by_label("Username").fill("scientist")
-        page.get_by_label("Password").fill(PASSWORD)
-        page.get_by_role("button", name="Sign in").click()
-        page.get_by_test_id("fleet-row-furnace-01").get_by_role("link").first.click()
+        login(page, stack.base)
+        page.get_by_test_id("card-furnace-01").click()
         header = page.get_by_test_id("instrument-header")
         header.wait_for()
         stack.stop_collector()
@@ -163,16 +192,14 @@ def test_fleet_to_history_csv_and_failure_states(running: Stack, tmp_path: Path)
             "Stale after the collector stopped",
         )
         assert "no new readings since" in page.get_by_test_id("acq-reason").inner_text()
-        shot(page, "instrument-stale-1366x768")
-
-        # API down: the page says so and keeps showing the last data with its age
+        shot(page, "furnace-stale-1366x768")
         stack.kill_server()
         page.get_by_test_id("connection-banner").wait_for(timeout=20000)
         assert (
             "Cannot reach the monitor service"
             in page.get_by_test_id("connection-banner").inner_text()
         )
-        shot(page, "instrument-api-down-1366x768")
+        shot(page, "furnace-api-down-1366x768")
         browser.close()
 
     assert foreign == [], f"unexpected external requests: {foreign}"

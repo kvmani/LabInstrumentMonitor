@@ -13,7 +13,7 @@
 - **Collector:** separate process (`labmon-collector run`), never a web worker. One process owns
   the SQLite outbox through one serialised connection. Acquisition, upload and heartbeat run in
   separate threads so network stalls cannot delay the schedule.
-- **Browser:** React 18 + TypeScript + Vite + Apache ECharts, bundled into `web/dist` and served by
+- **Browser:** React 19 + TypeScript (strict) + Vite + Apache ECharts 6, bundled into `web/dist` and served by
   the API from the same origin with relative URLs. No CDN, fonts or telemetry.
 - **Live update:** HTTP polling (2 s focused instrument, 5 s fleet) with abort-on-change,
   error backoff and slower polling for hidden tabs. SSE is deferred until measured.

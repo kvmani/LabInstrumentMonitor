@@ -192,3 +192,45 @@ def test_pragmas_are_applied(spool: Path) -> None:
     ob = Outbox(spool, "col-1", journal_mode="delete")
     assert ob._conn.execute("PRAGMA journal_mode").fetchone()[0] == "delete"
     assert ob._conn.execute("PRAGMA synchronous").fetchone()[0] == 2  # FULL
+
+
+def test_unacknowledged_counter_tracks_every_transition(spool: Path) -> None:
+    ob = Outbox(spool, "col-1", capacity=1000, diagnostic_reserve=10)
+
+    def counter() -> int:
+        return int(ob._meta("unacked") or 0)
+
+    for _ in range(6):
+        ob.append(lambda e, s: sample(e, s))
+    assert counter() == 6
+    b = ob.next_batch(max_records=3)
+    assert b is not None and counter() == 6  # batching does not change it
+    ob.mark_acked(b.batch_id, 1)
+    assert counter() == 3
+    b2 = ob.next_batch()
+    assert b2 is not None
+    ob.mark_rejected(b2.batch_id, [(ob.epoch, 5, "x", "y")], "r")
+    assert counter() == 2  # quarantined leaves, requeued stays
+    ob._set_meta("unacked", "999")  # corrupted counter is recomputed on open
+    ob.close()
+    assert int(Outbox(spool, "col-1")._meta("unacked") or 0) == 2
+
+
+def test_append_cost_does_not_grow_with_backlog(spool: Path) -> None:
+    import time
+
+    ob = Outbox(spool, "col-1", capacity=200_000, diagnostic_reserve=10, journal_mode="wal")
+    ob._conn.execute("PRAGMA synchronous=OFF")  # measure the query path, not the disk
+    batch = [lambda e, s: sample(e, s)] * 100
+
+    def timed(n: int) -> float:
+        t0 = time.perf_counter()
+        for _ in range(n):
+            ob.append_many(batch)
+        return time.perf_counter() - t0
+
+    early = timed(20)
+    for _ in range(400):  # 40 000 pending records
+        ob.append_many(batch)
+    late = timed(20)
+    assert late < early * 3 + 0.05

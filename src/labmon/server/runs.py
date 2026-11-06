@@ -17,7 +17,7 @@ from datetime import datetime
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
-from sqlalchemy import Connection, and_, desc, select, update
+from sqlalchemy import Connection, and_, desc, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from labmon.contracts.envelope import Envelope, EventType, format_utc
@@ -66,6 +66,26 @@ def apply_run_events(conn: Connection, events: list[Envelope], now: datetime) ->
     for e in sorted(events, key=lambda x: x.identity):
         if e.event_type is EventType.RUN_STARTED:
             s = RunStartedDetail.model_validate(e.detail or {})
+            # A collector restart can miss a run's end. A newer run on the same instrument
+            # proves the older one is over: close it at its planned end (or this start) and
+            # say so, instead of leaving it "running" forever.
+            conn.execute(
+                update(Run)
+                .where(
+                    and_(
+                        Run.instrument_id == e.instrument_id,
+                        Run.ended_at.is_(None),
+                        Run.started_at < s.program_start,
+                        Run.run_key != s.run_key,
+                    )
+                )
+                .values(
+                    ended_at=func.least(
+                        func.coalesce(Run.planned_end_at, s.program_start), s.program_start
+                    ),
+                    end_reason="end_not_reported",
+                )
+            )
             conn.execute(
                 pg_insert(Run)
                 .values(
@@ -112,9 +132,25 @@ def run_view(r: Any, now: datetime) -> dict[str, Any]:
         "planned_end_at": None if r.planned_end_at is None else format_utc(r.planned_end_at),
         "ended_at": None if end is None else format_utc(end),
         "end_reason": r.end_reason,
-        "active": end is None and r.started_at <= now,
+        "active": run_is_active(r, now),
         "metadata": r.run_metadata,
     }
+
+
+def run_is_active(r: Any, now: datetime) -> bool:
+    """Open and not past its planned end (a missed end report must not look like a live run)."""
+    if r.ended_at is not None or r.started_at > now:
+        return False
+    return r.planned_end_at is None or r.planned_end_at > now
+
+
+def effective_end(r: Any, now: datetime) -> tuple[datetime, bool]:
+    """(end of the data window, whether the run is over) for analysis."""
+    if r.ended_at is not None:
+        return r.ended_at, True
+    if r.planned_end_at is not None and r.planned_end_at <= now:
+        return r.planned_end_at, True
+    return now, False
 
 
 def list_runs(
@@ -132,7 +168,12 @@ def list_runs(
 def active_run(conn: Connection, instrument_id: str, now: datetime) -> dict[str, Any] | None:
     r = conn.execute(
         select(Run)
-        .where(Run.instrument_id == instrument_id, Run.ended_at.is_(None), Run.started_at <= now)
+        .where(
+            Run.instrument_id == instrument_id,
+            Run.ended_at.is_(None),
+            Run.started_at <= now,
+            or_(Run.planned_end_at.is_(None), Run.planned_end_at > now),
+        )
         .order_by(desc(Run.started_at))
         .limit(1)
     ).first()

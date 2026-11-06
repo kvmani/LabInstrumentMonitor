@@ -13,7 +13,7 @@ export function SimBadge({ simulated }: { simulated: boolean }) {
 export function AcqBadge({ state }: { state: AcquisitionState }) {
   const l = ACQ_LABEL[state] ?? { text: state, icon: "?", tone: "muted" };
   return (
-    <span className={`badge tone-${l.tone}`} data-testid="acq-state">
+    <span className={`pill tone-${l.tone}`} data-testid="acq-state">
       <span aria-hidden="true">{l.icon}</span> {l.text}
     </span>
   );
@@ -22,8 +22,18 @@ export function AcqBadge({ state }: { state: AcquisitionState }) {
 export function CollectorBadge({ state }: { state: string }) {
   const l = COLLECTOR_LABEL[state] ?? { text: state, icon: "?", tone: "muted" };
   return (
-    <span className={`badge tone-${l.tone}`} data-testid="collector-state">
+    <span className={`pill tone-${l.tone}`} data-testid="collector-state">
       <span aria-hidden="true">{l.icon}</span> {l.text}
     </span>
+  );
+}
+
+export function RunBadge({ active }: { active: boolean }) {
+  return active ? (
+    <span className="pill tone-ok">
+      <span className="dot" aria-hidden="true" /> Running
+    </span>
+  ) : (
+    <span className="pill tone-muted">Complete</span>
   );
 }

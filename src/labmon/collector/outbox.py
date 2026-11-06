@@ -198,6 +198,12 @@ class Outbox:
                 raise OutboxError(f"spool belongs to collector {existing!r}, not {collector_id!r}")
             else:
                 self.new_epoch_created = False
+            # Unacknowledged count is kept in meta (O(1) per append). Recount once on open so a
+            # crash between statements can never leave it wrong for long.
+            recount = self._conn.execute(
+                "SELECT COUNT(*) FROM record WHERE state IN ('pending', 'batched')"
+            ).fetchone()[0]
+            self._set_meta("unacked", str(int(recount)))
         self.collector_id = collector_id
 
     def _derive_epoch(self) -> int:
@@ -222,6 +228,9 @@ class Outbox:
     def _meta(self, key: str) -> str | None:
         row = self._conn.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
         return None if row is None else str(row[0])
+
+    def _adjust_unacked(self, delta: int) -> None:
+        self._set_meta("unacked", str(max(0, int(self._meta("unacked") or 0) + delta)))
 
     def _set_meta(self, key: str, value: str) -> None:
         self._conn.execute(
@@ -254,9 +263,7 @@ class Outbox:
             for i, env in enumerate(envs):
                 if env.identity != (self.collector_id, epoch, seq + i):
                     raise OutboxError("envelope identity does not match the allocated identity")
-            unacked = conn.execute(
-                "SELECT COUNT(*) FROM record WHERE state IN ('pending', 'batched')"
-            ).fetchone()[0]
+            unacked = int(self._meta("unacked") or 0)
             only_events = all(e.kind is RecordKind.EVENT for e in envs)
             limit = self.capacity if only_events else self.capacity - self.diagnostic_reserve
             if unacked + len(envs) > limit:
@@ -281,6 +288,7 @@ class Outbox:
                 rows,
             )
             self._set_meta("next_seq", str(seq + len(envs)))
+            self._set_meta("unacked", str(unacked + len(envs)))
             return envs
 
     # --- batching ------------------------------------------------------------------------------
@@ -358,7 +366,8 @@ class Outbox:
                 "WHERE batch_id = ? AND state = 'batched'",
                 (now, batch_id),
             )
-            return cur.rowcount
+            self._adjust_unacked(-cur.rowcount)
+            return int(cur.rowcount)
 
     def mark_rejected(
         self, batch_id: str, rejected: list[tuple[int, int, str, str]], batch_reason: str
@@ -395,6 +404,7 @@ class Outbox:
                 "UPDATE batch SET state = 'rejected', last_error = ? WHERE batch_id = ?",
                 (batch_reason[:500], batch_id),
             )
+            self._adjust_unacked(-len(targets))
             return len(targets), len(requeue)
 
     def mark_conflict(self, batch_id: str, reason: str) -> None:

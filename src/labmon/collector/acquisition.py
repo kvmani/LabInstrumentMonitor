@@ -84,7 +84,11 @@ class Acquisition:
         clock: Clock,
         instruments: tuple[InstrumentBinding, ...],
         simulated: bool = True,
+        mode: str = "live",
     ) -> None:
+        if mode not in ("live", "historical_playback"):
+            raise ValueError("mode must be live or historical_playback")
+        self.mode = mode
         self.outbox = outbox
         self.clock = clock
         self.simulated = simulated
@@ -222,7 +226,7 @@ class Acquisition:
             self._event(
                 st.binding,
                 EventType.ACQUISITION_STARTED,
-                {"cadence_ms": cadence, "first_sample": _utc_ms(st.next_t_ms)},
+                {"cadence_ms": cadence, "first_sample": _utc_ms(st.next_t_ms), "mode": self.mode},
                 wall,
             )
             if self.outbox.new_epoch_created:

@@ -207,7 +207,10 @@ def channel_series(
         "gaps": compute_gaps(conn, ch, start, end, now),
         "events": _events(conn, ch.instrument_id, start, end),
     }
-    raw_limit = max(limits.raw_point_limit, budget)
+    # an explicit point budget (e.g. a 60-point sparkline) also caps raw mode
+    raw_limit = (
+        limits.raw_point_limit if max_points is None else min(limits.raw_point_limit, max_points)
+    )
     if count <= raw_limit:
         out["mode"] = "raw"
         out["points"] = _raw_points(conn, ch, start, end)

@@ -1,4 +1,4 @@
-import type { AcquisitionState, ChannelStatus, InstrumentStatus, SampleView } from "./types";
+import type { AcquisitionState, ChannelStatus, InstrumentStatus } from "./types";
 import { formatTime } from "./time";
 
 export const ACQ_LABEL: Record<AcquisitionState, { text: string; icon: string; tone: string }> = {
@@ -58,14 +58,14 @@ function channelName(s: InstrumentStatus, key: string): string {
 }
 
 export function primaryChannel(s: InstrumentStatus): ChannelStatus | undefined {
-  return s.channels.find((c) => c.role === "measurement") ?? s.channels[0];
+  const key = s.display?.panels?.[0]?.channels?.[0];
+  return (
+    s.channels.find((c) => c.key === key) ??
+    s.channels.find((c) => c.role === "measurement") ??
+    s.channels[0]
+  );
 }
 
-export function formatValue(ch: { data_type: string; display_precision: number; unit: string; enum_labels: Record<string, string> | null }, v: SampleView | null): string {
-  if (!v) return "—";
-  if (v.value === null) return v.quality === "bad" ? `bad (${(v.quality_reason ?? "").replace(/_/g, " ")})` : "—";
-  if (ch.data_type === "enum") return v.label ?? ch.enum_labels?.[String(v.value)] ?? String(v.value);
-  if (ch.data_type === "bool") return v.value ? "On" : "Off";
-  const num = typeof v.value === "number" ? v.value.toFixed(ch.display_precision) : String(v.value);
-  return ch.unit ? `${num} ${ch.unit}` : num;
+export function needsAttention(s: InstrumentStatus): boolean {
+  return ["degraded", "stale", "source_unavailable"].includes(s.acquisition.state);
 }

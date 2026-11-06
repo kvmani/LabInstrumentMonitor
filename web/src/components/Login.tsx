@@ -23,8 +23,13 @@ export function Login({ onSignedIn }: { onSignedIn: (s: SessionInfo) => void }) 
 
   return (
     <main className="login">
-      <form onSubmit={submit} aria-labelledby="login-title">
-        <h1 id="login-title">Lab Instrument Monitor</h1>
+      <form className="card" onSubmit={submit} aria-labelledby="login-title">
+        <div className="brand">
+          <span className="logo" aria-hidden="true">
+            ∿
+          </span>
+          <h1 id="login-title">Lab Instrument Monitor</h1>
+        </div>
         <p className="muted">Read-only monitoring. Sign in with your lab account.</p>
         <label>
           Username
@@ -39,7 +44,7 @@ export function Login({ onSignedIn }: { onSignedIn: (s: SessionInfo) => void }) 
             {error}
           </p>
         )}
-        <button type="submit" disabled={busy}>
+        <button type="submit" className="btn-primary" disabled={busy}>
           {busy ? "Signing in…" : "Sign in"}
         </button>
       </form>

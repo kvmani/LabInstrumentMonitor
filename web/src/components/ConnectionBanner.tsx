@@ -15,7 +15,7 @@ export function ConnectionBanner(props: {
     ? `showing data last refreshed at ${formatTime(lastSuccessAt, tz, false)} ${tzLabel} (${formatAge((now - lastSuccessAt) / 1000)})`
     : "no data loaded yet";
   return (
-    <div className="banner banner-bad" role="alert" data-testid="connection-banner">
+    <div className="banner" role="alert" data-testid="connection-banner">
       <strong>{online ? "Cannot reach the monitor service" : "This browser is offline"}</strong> ·{" "}
       {shown}. Acquisition continues on the collector; values below may be out of date.
     </div>

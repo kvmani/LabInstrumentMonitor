@@ -14,6 +14,7 @@ import signal
 import ssl
 import sys
 import threading
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import FrameType
 
@@ -23,7 +24,7 @@ from labmon.collector.acquisition import Acquisition
 from labmon.collector.config import CollectorConfig, load_config
 from labmon.collector.outbox import Outbox
 from labmon.collector.uploader import Heartbeat, Uploader
-from labmon.sim.clock import SystemClock
+from labmon.sim.clock import SystemClock, VirtualClock
 
 log = logging.getLogger("labmon.collector")
 
@@ -139,6 +140,43 @@ def cmd_status(cfg: CollectorConfig, as_json: bool) -> int:
     return 0
 
 
+def cmd_backfill(cfg: CollectorConfig, hours: float) -> int:
+    """Development/rehearsal only: spool simulated history for the last ``hours`` on a virtual
+    clock. Records carry their original (past) capture times; acquisition events are marked
+    ``mode=historical_playback`` so playback stays distinguishable from live acquisition.
+    Stop the live collector first: one process owns the spool. ``run`` uploads the backlog."""
+    if not 0 < hours <= 72:
+        print("--hours must be in (0, 72]", file=sys.stderr)
+        return 2
+    real_now = datetime.now(UTC)
+    clock = VirtualClock(real_now - timedelta(hours=hours))
+    outbox = Outbox(
+        cfg.spool_path,
+        cfg.collector_id,
+        capacity=cfg.spool_capacity,
+        diagnostic_reserve=cfg.diagnostic_reserve,
+        journal_mode=cfg.journal_mode,
+        now=clock.now,
+    )
+    try:
+        acq = Acquisition(
+            outbox, clock, cfg.instruments, simulated=True, mode="historical_playback"
+        )
+        acq.start()
+        while clock.now() < real_now:
+            clock.advance(max(acq.seconds_until_due(), 0.0))
+            acq.run_due()
+        acq.stop()
+        c = outbox.counts()
+        print(
+            f"spooled {acq.stats.frames} frames ({acq.stats.samples} samples); "
+            f"{c.unacknowledged} records await upload"
+        )
+    finally:
+        outbox.close()
+    return 0
+
+
 def cmd_quarantine(cfg: CollectorConfig) -> int:
     outbox = open_outbox(cfg)
     try:
@@ -151,17 +189,21 @@ def cmd_quarantine(cfg: CollectorConfig) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="labmon-collector")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("run", "status", "quarantine"):
+    for name in ("run", "status", "quarantine", "backfill"):
         p = sub.add_parser(name)
         p.add_argument("--config", type=Path, required=True)
         if name == "status":
             p.add_argument("--json", action="store_true")
+        if name == "backfill":
+            p.add_argument("--hours", type=float, default=2.0)
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)  # one line per request is noise
     cfg = load_config(args.config)
     if args.command == "run":
         return cmd_run(cfg)
+    if args.command == "backfill":
+        return cmd_backfill(cfg, args.hours)
     if args.command == "status":
         return cmd_status(cfg, args.json)
     return cmd_quarantine(cfg)

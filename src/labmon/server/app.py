@@ -42,7 +42,7 @@ from labmon.server.ingest import (
     read_bounded,
 )
 from labmon.server.models import AcquisitionEvent, Channel, Collector, Instrument, Run
-from labmon.server.runs import list_runs, run_view
+from labmon.server.runs import effective_end, list_runs, run_view
 from labmon.server.security import (
     CSRF_HEADER,
     SESSION_COOKIE,
@@ -422,7 +422,7 @@ def create_app(
                     )
                 )
             }
-            end = run.ended_at or at
+            end, over = effective_end(run, at)
             analysis_out: dict[str, Any] | None = None
             try:
                 if display["analysis"] == "tensile":
@@ -436,7 +436,7 @@ def create_app(
                     analysis_out = analysis.tensile(
                         frames,
                         (run.run_metadata or {}).get("geometry"),
-                        ended=run.ended_at is not None,
+                        ended=over,
                     )
                 elif display["analysis"] == "dsc":
                     frames = load_frames(

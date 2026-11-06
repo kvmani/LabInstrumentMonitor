@@ -197,3 +197,26 @@ def test_runs_are_scoped(engine: Engine, db_url: str, tmp_path: Path) -> None:
     assert rig.client.get("/api/v1/instruments/utm-01/runs").status_code == 404
     assert rig.client.get("/api/v1/runs/utm-01.c000000").status_code == 404
     assert rig.client.get("/api/v1/instruments/utm-01/events").status_code == 404
+
+
+def test_missed_run_end_is_closed_by_the_next_run(
+    engine: Engine, db_url: str, tmp_path: Path
+) -> None:
+    """Collector stops mid-test and restarts after the test ended: the open run must not stay
+    'running'; it is closed as end_not_reported once the next run starts."""
+    rig = Rig(engine, db_url, tmp_path, at_ms(ANCHOR_MS + 250_000), (UTM_SEED,))
+    rig.run_for(30)  # inside test c000000
+    rig.clock.advance(300)  # collector down until the next cycle's idle period (t = 580 s)
+    rig.restart_collector()
+    sign_in(rig.client)
+    status = rig.client.get("/api/v1/instruments/utm-01/status").json()
+    assert status["active_run"] is None  # past its planned end: not shown as running
+    rig.run_for(80)  # into the next test (preload at 645 s)
+    items = {r["run_key"]: r for r in runs(rig.client, "utm-01")}
+    old, new = items["c000000"], items["c000001"]
+    assert old["ended_at"] == "2026-01-01T00:06:45.000000Z" and old["end_reason"] == (
+        "end_not_reported"
+    )
+    assert not old["active"] and new["active"]
+    s = rig.client.get(f"/api/v1/runs/{old['id']}").json()["analysis"]["summary"]
+    assert s["uts_mpa"] is None and "fracture not observed" in s["reasons"]
