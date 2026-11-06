@@ -56,6 +56,7 @@ def seed_world(engine: Engine, valid_from: datetime) -> World:
         other = issue_collector_credential(c, "col-b")
         ensure_user(c, "alice", "Alice", PASSWORD, {"lab-a": "scientist"})
         ensure_user(c, "bob", "Bob", PASSWORD, {"lab-b": "viewer"})
+        ensure_user(c, "carol", "Carol", PASSWORD, {"lab-a": "viewer"})
     return World(engine, token, other)
 
 

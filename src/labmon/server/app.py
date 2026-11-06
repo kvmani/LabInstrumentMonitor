@@ -42,6 +42,20 @@ from labmon.server.ingest import (
     read_bounded,
 )
 from labmon.server.models import AcquisitionEvent, Channel, Collector, Instrument, Run
+from labmon.server.records import (
+    AnnotationCreate,
+    AnnotationUpdate,
+    RecordError,
+    Retract,
+    RunCreate,
+    RunUpdate,
+    create_annotation,
+    create_run,
+    list_annotations,
+    retract_annotation,
+    update_annotation,
+    update_run,
+)
 from labmon.server.runs import effective_end, list_runs, run_view
 from labmon.server.security import (
     CSRF_HEADER,
@@ -403,6 +417,61 @@ def create_app(
                 for r in rows
             ]
         }
+
+    # --- operator records (RUN-01): runs and annotations ---------------------------------------
+
+    def _records(fn: Callable[[Any], dict[str, Any]]) -> dict[str, Any]:
+        try:
+            with engine.begin() as conn:
+                return fn(conn)
+        except RecordError as exc:
+            raise HTTPException(exc.status, exc.message) from exc
+
+    @app.post(
+        "/api/v1/instruments/{instrument_id}/runs",
+        status_code=201,
+        dependencies=[Depends(require_same_origin)],
+    )
+    def post_run(instrument_id: str, body: RunCreate, p: User) -> dict[str, Any]:
+        return _records(lambda c: create_run(c, p, instrument_id, body, now()))
+
+    @app.patch("/api/v1/runs/{run_id}", dependencies=[Depends(require_same_origin)])
+    def patch_run(run_id: str, body: RunUpdate, p: User) -> dict[str, Any]:
+        return _records(lambda c: update_run(c, p, run_id, body, now()))
+
+    @app.get("/api/v1/instruments/{instrument_id}/annotations")
+    def get_annotations(
+        instrument_id: str,
+        p: User,
+        start: Annotated[str, Query(max_length=40)],
+        end: Annotated[str, Query(max_length=40)],
+        include_retracted: bool = False,
+    ) -> dict[str, Any]:
+        try:
+            s, e = parse_range(start, end, series_limits.max_range)
+        except RangeError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        with engine.connect() as conn:
+            scoped_instrument(conn, p, instrument_id)
+            return {"items": list_annotations(conn, instrument_id, s, e, include_retracted)}
+
+    @app.post(
+        "/api/v1/instruments/{instrument_id}/annotations",
+        status_code=201,
+        dependencies=[Depends(require_same_origin)],
+    )
+    def post_annotation(instrument_id: str, body: AnnotationCreate, p: User) -> dict[str, Any]:
+        return _records(lambda c: create_annotation(c, p, instrument_id, body, now()))
+
+    @app.patch("/api/v1/annotations/{annotation_id}", dependencies=[Depends(require_same_origin)])
+    def patch_annotation(annotation_id: int, body: AnnotationUpdate, p: User) -> dict[str, Any]:
+        return _records(lambda c: update_annotation(c, p, annotation_id, body, now()))
+
+    @app.post(
+        "/api/v1/annotations/{annotation_id}/retract", dependencies=[Depends(require_same_origin)]
+    )
+    def retract(annotation_id: int, body: Retract, p: User) -> dict[str, Any]:
+        return _records(lambda c: retract_annotation(c, p, annotation_id, body, now()))
 
     @app.get("/api/v1/runs/{run_id}")
     def get_run(run_id: str, p: User) -> dict[str, Any]:

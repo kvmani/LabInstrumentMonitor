@@ -27,6 +27,9 @@ from labmon.server.models import (
 COLLECTOR_TOKEN_PREFIX = "lmc_"  # noqa: S105 - a public prefix, not a secret
 SESSION_COOKIE = "labmon_session"
 CSRF_HEADER = "X-Labmon-Request"
+# Role matrix (SPECIFICATIONS §10). Viewer and auditor are read-only.
+ROLES = ("viewer", "scientist", "custodian", "administrator", "auditor")
+RECORD_ROLES = frozenset({"scientist", "custodian", "administrator"})
 
 _hasher = PasswordHasher()  # Argon2id, library-maintained defaults
 _DUMMY_HASH = _hasher.hash("timing-equaliser-not-a-password")
@@ -114,6 +117,10 @@ class Principal:
 
     def can_view(self, lab_id: str) -> bool:
         return lab_id in self.labs
+
+    def can_record(self, lab_id: str) -> bool:
+        """Create or correct operator records (runs, annotations). Never instrument control."""
+        return self.labs.get(lab_id) in RECORD_ROLES
 
 
 def load_principal(conn: Connection, token: str, now: datetime) -> Principal | None:

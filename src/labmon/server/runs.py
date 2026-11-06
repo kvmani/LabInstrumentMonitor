@@ -134,6 +134,10 @@ def run_view(r: Any, now: datetime) -> dict[str, Any]:
         "end_reason": r.end_reason,
         "active": run_is_active(r, now),
         "metadata": r.run_metadata,
+        "notes": r.notes,
+        "tags": r.tags or [],
+        "created_by": r.created_by,
+        "updated_at": None if r.updated_at is None else format_utc(r.updated_at),
     }
 
 

@@ -316,6 +316,10 @@ class Run(Base):
     end_reason: Mapped[str | None] = mapped_column(Text)
     run_metadata: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB)
     first_seen_at: Mapped[datetime] = mapped_column(TS)
+    notes: Mapped[str | None] = mapped_column(Text)
+    tags: Mapped[list[str]] = mapped_column(JSONB, server_default="[]")
+    created_by: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[datetime | None] = mapped_column(TS)
 
 
 class SampleRollup1m(Base):
@@ -353,3 +357,24 @@ class RollupDirty(Base):
     bucket: Mapped[datetime] = mapped_column(TS)
     revision: Mapped[int] = mapped_column(BigInteger)
     marked_at: Mapped[datetime] = mapped_column(TS)
+
+
+class Annotation(Base):
+    """A scientist's note on an instrument timeline (optionally a window and a run). Corrections
+    bump ``revision`` and are audited with before/after; retraction is soft and audited."""
+
+    __tablename__ = "annotation"
+    __table_args__ = (Index("ix_annotation_instrument_at", "instrument_id", "at"),)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    instrument_id: Mapped[str] = mapped_column(ForeignKey("instrument.id"))
+    run_id: Mapped[str | None] = mapped_column(ForeignKey("run.id"))
+    at: Mapped[datetime] = mapped_column(TS)
+    end_at: Mapped[datetime | None] = mapped_column(TS)
+    text: Mapped[str] = mapped_column(Text)
+    author_id: Mapped[int] = mapped_column(ForeignKey("app_user.id"))
+    created_at: Mapped[datetime] = mapped_column(TS)
+    revision: Mapped[int] = mapped_column(Integer, server_default="1")
+    updated_at: Mapped[datetime | None] = mapped_column(TS)
+    retracted_at: Mapped[datetime | None] = mapped_column(TS)
+    retracted_by: Mapped[int | None] = mapped_column(ForeignKey("app_user.id"))
+    retract_reason: Mapped[str | None] = mapped_column(Text)
