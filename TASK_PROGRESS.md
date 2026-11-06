@@ -6,12 +6,77 @@ field-verified, and no simulated pass is field acceptance.
 
 ## Current state (resume here)
 
-- **Active work:** ROADMAP "First implementation tranche" items 1–5 — **done** (simulated furnace
-  only). M0 gate evidence attached except owner inputs; M1 gate evidence attached, awaiting owner
-  review. Next milestone: **M2** (see "Next actions").
+- **Done:** first tranche (M0 + M1) and the second tranche (ROADMAP "Second implementation
+  tranche"): MIT license, confirmed Ubuntu 24.04 / Python 3.12 / PostgreSQL 16 baseline,
+  manual-only CI with `scripts/check.sh`, UTM + vacuum dilatometer + opt-in DSC simulators,
+  runs and XY analyses, redesigned dashboards, rehearsal playback, standards docs.
+- **Active milestone:** M2 (in progress). Next actions are listed at the end of this section.
 - **Branches:** `main` and `claude/cool-hawking-huoxx4` carry identical history.
-- **Dev environment used:** Ubuntu 24.04 container, CPython 3.12.3 (SQLite 3.45.1),
-  PostgreSQL 16.15, Node 22, Chromium from Playwright 1.63.0.
+- **Environment used:** Ubuntu 24.04 container, CPython 3.12.3 (SQLite 3.45.1), PostgreSQL
+  16.15, Node 22, Chromium from Playwright 1.63.0. All evidence is **simulated**.
+
+### Checkpoint 2 — owner requests of 2026-11-06 (simulated)
+
+| Request | Result | Evidence |
+| --- | --- | --- |
+| Baseline confirmed | Recorded in AGENTS, CONTRIBUTING, SPECIFICATIONS v0.3, ROADMAP (M0 done) | docs |
+| CI manual only | `ci.yml` has only `workflow_dispatch`; ADR 0005; local gate `scripts/check.sh` | `.github/workflows/ci.yml` |
+| MIT license | `LICENSE`, `pyproject.toml` (`license = "MIT"`), `web/package.json` | files |
+| UTM, dilatometer, DSC simulators | One source contract, per-instrument multi-rate scheduling (UTM 5 Hz while testing), run events, known answers in each module docstring (ADR 0004) | `tests/unit/test_simulator.py`, `test_acquisition.py` |
+| Runs and XY analysis | Migration 0002 (expand-only), run projection in the ingest transaction, `/runs`, `/runs/{id}`, `/events` | `tests/integration/test_runs.py` |
+| Elegant front end and dashboards | Fleet dashboard (KPIs, cards, sparklines, table), workspace tabs (Overview / Runs & XY analysis / Diagnostics), light/dark/auto | `tests/e2e/test_browser.py`, screenshots |
+| Best-practice foundational docs | CONTRIBUTING.md (standards, definition of done), AGENTS.md, SPECIFICATIONS v0.3, ROADMAP, ADR 0004/0005, README, operations doc | docs |
+
+Known answers verified end to end through the real collector path (acquisition → SQLite outbox
+→ uploader → API → PostgreSQL), see `tests/integration/test_runs.py`:
+
+- Tensile run: UTS 480 ± 0.6 MPa at strain 0.18 ± 0.01, max force 13.572 kN, fracture after the
+  UTS at strain 0.28, > 700 frame-paired points at 5 Hz in acquisition order, UTS withheld for
+  incomplete runs.
+- DSC run (exo up): endotherm below −25 mW at 157.5–159.5 °C with area −286 mJ ± 3 %
+  (−28.6 J/g); exotherm above +29 mW at 152–154.5 °C with area +286 mJ ± 5 %.
+- Collector restart mid-run is idempotent; a missed run end is closed when the next run starts
+  (`end_not_reported`) and never shown as active past its planned end.
+
+Rehearsal run (manual, simulated): `backfill --hours 3` spooled 60 632 frames
+(181 896 samples) in 1 min 44 s; the live collector then uploaded the 181 982-record backlog in
+70 s with nothing quarantined. Screenshots reviewed: dashboard light/dark, furnace 24 h,
+dilatometer log pressure, UTM stress–strain run, DSC heat flow vs temperature, diagnostics,
+phone/tablet/wide.
+
+Defects found and fixed during this checkpoint:
+
+1. Outbox append counted every pending row (`COUNT(*)`), so appends slowed as a backlog grew;
+   now an O(1) counter in the outbox meta table, recounted on open (regression test).
+2. A run left open by a stopped collector stayed "Running" forever (fixed as above).
+3. "Delivery delayed" was claimed whenever a heartbeat saw records in flight; now it requires
+   the oldest pending record to be older than the 5 s freshness window at heartbeat time.
+
+### Validation (latest)
+
+| Command | Result |
+| --- | --- |
+| `scripts/check.sh` | ruff clean, mypy --strict clean (41 files), **128 passed** (unit + integration, 39.8 s), web typecheck + build clean |
+| `pytest tests/e2e` | **2 passed** (recovery with the 3-instrument fleet; browser dashboard → workspace → CSV → stale → API down, no external requests) |
+
+### Current limits
+
+- Bucketed history is computed from raw rows (no rollups yet); persisted missing intervals,
+  saved views, annotations, user-created runs, role matrix and durable exports are M2 work.
+- DSC peak areas use a straight baseline across a fixed window and are labelled estimates;
+  extrapolated onset is not computed yet.
+- Playback (`backfill`) must not run while the live collector owns the spool (documented, not
+  enforced by a lock).
+- The CI workflow has never been dispatched on GitHub; only local gate runs are recorded.
+
+### Next actions (M2)
+
+1. Minute/hour rollups with dirty-bucket invalidation in the ingest transaction; persisted
+   missing intervals; 30-day furnace fixture with a one-sample peak and a dropout; p95 timing.
+2. RUN-01: user-created runs and annotations with audit; saved views and shared templates.
+3. Role matrix and admin audit; durable export worker with manifest and checksums.
+4. Spool ownership lock; DSC extrapolated onset; tensile 0.2 % offset yield.
+5. Scientist usability review of the dashboards, fix findings and repeat.
 
 ## Checkpoint 1 — First implementation tranche
 
@@ -44,7 +109,7 @@ export LABMON_DATABASE_URL=postgresql+psycopg://labmon@127.0.0.1:55432/labmon LA
 .venv/bin/labmon-collector run --config .devdata/collector/collector.toml
 ```
 
-## Validation results (exact, latest run)
+## Tranche 1 record: validation results
 
 | Command | Result |
 | --- | --- |
@@ -81,7 +146,7 @@ Gate-relevant facts demonstrated (all simulated):
 - Schema: Alembic `0001` (rollback floor; its downgrade is for disposable DBs only).
 - Outbox schema v1 (SQLite), journal choice per ADR 0003.
 
-## Current limits (known, intentional for M1)
+## Tranche 1 record: limits at the end of M1 (superseded by the current state above)
 
 - Only the simulated furnace (+ ambient smoke fixture). UTM, vacuum dilatometer and opt-in DSC
   are M2 and must reuse these contracts.
@@ -106,14 +171,14 @@ Gate-relevant facts demonstrated (all simulated):
 
 | Item | Owner | Notes |
 | --- | --- | --- |
-| Repository license | Owner | Not chosen; `pyproject.toml` deliberately has no license field |
-| Ubuntu/Python/PostgreSQL baseline | Owner / site | Taken from SPECIFICATIONS §2 (24.04 / 3.12 / 16); not re-verified against the reference repos in this session |
+| Repository license | Owner | **Resolved:** MIT (2026-11-06) |
+| Ubuntu/Python/PostgreSQL baseline | Owner / site | **Resolved:** confirmed by the owner (24.04 / 3.12 / 16) |
 | SQLite WAL-reset fix threshold (3.51.3) | Dev | Re-verify against upstream notes and each platform build before M3 (ADR 0003) |
 | Spool epoch derived from wall clock at spool creation | Dev | A badly wrong clock at creation could reuse an epoch; server refuses with `identity_conflict` rather than overwriting (ADR 0002) |
 | Windows 11 collector | Dev | Not exercised yet (POSIX token-permission check only); M3 packaging |
 | Starlette TestClient deprecation of `httpx` | Dev | Warning filtered in tests; revisit when upgrading Starlette |
 
-## Next actions (M2 · reliability and chart workbench)
+## Tranche 1 record: planned next actions (superseded by the current state above)
 
 1. Long-history path: 30-day furnace fixture with a one-sample peak and a known dropout loaded via
    a documented test path (virtual clock, original event times); minute/hour rollups with dirty
@@ -163,3 +228,9 @@ Gate-relevant facts demonstrated (all simulated):
   `uv export` + `uv build`), `.github/workflows/ci.yml` (unverified on GitHub).
 - Clean-clone rebuild: frozen install, `npm ci`, build, 101 unit+integration tests passed.
 - ROADMAP status column: M0 "In progress", M1 "Simulated evidence attached; awaiting owner review".
+
+### 2026-11-06 — commits 6–10 (second tranche)
+- `323682e` MIT license and manual-only CI. `dca348f` simulator fleet and multi-rate scheduler
+  (81 unit tests). `9f9bca9` runs and XY analysis (125 unit + integration tests).
+  `ddf0b11` dashboards, playback, outbox counter, run closing, delivery-delayed rule, docs
+  (128 + 2 e2e). Final commit: phone layout polish and this ledger.

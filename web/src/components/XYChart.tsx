@@ -73,7 +73,7 @@ export function XYChart(props: { title: string; analysis: XYAnalysis; tz: string
         aria: { enabled: true, label: { description: `${title}: ${analysis.y.label} versus ${analysis.x.label}.` } },
         title: { text: title, left: 8, top: 2, textStyle: { fontSize: 13, color: fg, fontWeight: 600 } },
         toolbox: { right: 12, top: 0, iconStyle: { borderColor: muted }, feature: { saveAsImage: { title: "Save PNG", name: title.replace(/[^A-Za-z0-9_-]+/g, "_"), pixelRatio: 2, backgroundColor: cssVar("--surface") } } },
-        legend: { top: 26, left: 8, textStyle: { color: fg } },
+        legend: { type: "scroll", top: 26, left: 8, right: 40, textStyle: { color: fg } },
         grid: { left: 84, right: 28, top: 64, bottom: 56 },
         tooltip: {
           trigger: "item",

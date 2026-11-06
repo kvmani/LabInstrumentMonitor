@@ -275,7 +275,7 @@ export function TimePanels(props: {
         aria: { enabled: true, label: { description: `${title}. Time axis in ${tzLabel}.` } },
         title: { text: title, left: 8, top: 2, textStyle: { fontSize: 13, color: fg, fontWeight: 600 } },
         toolbox: { right: 12, top: 0, iconStyle: { borderColor: muted }, feature: { saveAsImage: { title: "Save PNG", name: title.replace(/[^A-Za-z0-9_-]+/g, "_"), pixelRatio: 2, backgroundColor: cssVar("--surface") } } },
-        legend: { top: 26, left: 8, textStyle: { color: fg }, data: [...new Set(legend)] },
+        legend: { type: "scroll", top: 26, left: 8, right: 40, textStyle: { color: fg }, data: [...new Set(legend)] },
         axisPointer: { link: [{ xAxisIndex: "all" }] },
         tooltip: {
           trigger: "axis",
