@@ -65,3 +65,19 @@ Evidence labels: **simulated** (synthetic sources on a dev machine/CI), **staged
   status Receiving, 1 Hz ACKs, Chromium at 1366×768 made **no requests outside 127.0.0.1:8000**.
 - **Next:** process-level recovery e2e (kill API / lost ACK), Playwright browser e2e, screenshots
   at supported sizes, docs/operations/local-dev.md.
+
+### 2026-11-06 — commit 4 (M1 gate evidence: process recovery + browser)
+- `pytest` (all) → **103 passed** in 69 s: 63 unit, 38 integration, 2 e2e. ruff, mypy --strict,
+  `tsc -b` clean. *Simulated evidence only.*
+- `tests/e2e/test_recovery.py` (real API + collector processes): API SIGKILLed for 8 s while the
+  collector kept capturing (≥18 new records); after restart the backlog drained, every acked
+  identity is centrally present exactly once with identical digests, no duplicate rows, and the
+  PV history has **no gap > 2.5 s across the API outage**. Collector SIGKILL + restart resumes the
+  same spool epoch and sequence; reconciliation passes again.
+- `tests/e2e/test_browser.py` (Chromium 1.63 via Playwright): login → fleet (Receiving,
+  SIMULATED, °C, empty-state Waiting row "no collector assigned") → furnace in two interactions to
+  24 h → 15 min, summary "no gaps", zoom → "Paused", Resume live, CSV download (SIMULATED_ file,
+  pv/sp/phase rows), UTC toggle; browser closed → samples keep increasing; collector stopped →
+  "Stale · no new readings since …"; API killed → connection banner with last-refresh age.
+  **Zero requests outside the app origin.** Screenshots (1366×768, 1920×1080, 1024×768, stale,
+  API down) via `LABMON_SCREENSHOTS=1` → `test-results/screenshots/` (not committed).

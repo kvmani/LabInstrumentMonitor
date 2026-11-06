@@ -155,7 +155,7 @@ export function HistoryChart(props: {
     const gapAreas = measured.gaps.map((g) => [
       {
         xAxis: Date.parse(g.start),
-        name: g.open ? `No data since ${formatTime(g.start, tz, false)}` : `No data · ${formatDuration(g.duration_s)}`,
+        name: g.open ? "no data yet" : `no data · ${formatDuration(g.duration_s)}`,
       },
       { xAxis: Date.parse(g.end) },
     ]);
