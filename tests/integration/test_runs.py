@@ -130,6 +130,10 @@ def test_tensile_run_known_answers(engine: Engine, db_url: str, tmp_path: Path) 
     assert s["fracture_after_uts"] is True
     assert s["fracture_strain"] == pytest.approx(0.28, abs=0.002)
     assert s["max_force_kn"] == pytest.approx(13.572, abs=0.02)
+    assert s["modulus_gpa"] == pytest.approx(200.0, rel=0.05)
+    assert s["modulus_fit"]["points"] >= 15
+    assert s["rp02_mpa"] == pytest.approx(353.6, abs=3.0)  # known answer of the model
+    assert s["rp02_mpa"] < s["uts_mpa"]
     pts = [p for p in a["points"] if p is not None]
     assert len(pts) > 700  # 5 Hz over ~145 s of loading
     times = [p[2] for p in pts]
@@ -168,6 +172,8 @@ def test_dsc_run_known_answers_and_sign(engine: Engine, db_url: str, tmp_path: P
     assert endo["peak_mw"] < -25.0 and 157.5 < endo["sample_t_c"] < 159.5
     assert endo["area_mj"] == pytest.approx(-286.0, rel=0.03)
     assert endo["specific_j_per_g"] == pytest.approx(-28.6, rel=0.03)
+    assert endo["onset_c"] == pytest.approx(156.6, abs=0.5)  # declared melting onset
+    assert exo["onset_c"] == pytest.approx(154.0, abs=1.0)  # supercooled freezing
     assert exo["peak_mw"] > 29.0 and 152.0 < exo["sample_t_c"] < 154.5
     assert exo["area_mj"] == pytest.approx(286.0, rel=0.05)
     segs = a["summary"]["segments"]

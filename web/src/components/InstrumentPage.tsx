@@ -496,6 +496,15 @@ function RunAnalysisView({ detail, s, tz, tzLabel, theme, canRecord, onChanged }
         <>
           <div className="metrics">
             <Metric label="UTS (engineering)" value={num(sm.uts_mpa, 1, "MPa")} hint={sm.complete ? `at strain ${num(sm.uts_strain, 4)}` : "reported for complete runs only"} />
+            <Metric label="Rp0.2 (0.2 % offset yield)" value={num(sm.rp02_mpa, 1, "MPa")} hint={typeof sm.rp02_strain === "number" ? `at strain ${num(sm.rp02_strain, 4)}` : undefined} />
+            <Metric
+              label="Young's modulus (fit)"
+              value={num(sm.modulus_gpa, 1, "GPa")}
+              hint={(() => {
+                const f = sm.modulus_fit as { points?: number; rmse_mpa?: number; note?: string } | null;
+                return f ? (f.note ?? `${f.points} points · rmse ${f.rmse_mpa} MPa`) : undefined;
+              })()}
+            />
             <Metric label="Max force" value={num(sm.max_force_kn, 3, "kN")} />
             <Metric label="Fracture strain" value={num(sm.fracture_strain, 4)} hint={sm.fracture_after_uts === true ? "fracture after UTS ✓" : undefined} />
             <Metric label="Geometry" value={geo ? `A0 ${num(geo.area_mm2, 3, "mm²")}` : "missing"} hint={geo ? `L0 ${num(geo.gauge_length_mm, 2, "mm")} · Ø ${num(geo.diameter_mm, 2, "mm")}` : undefined} />
@@ -508,13 +517,13 @@ function RunAnalysisView({ detail, s, tz, tzLabel, theme, canRecord, onChanged }
         <>
           <div className="metrics">
             {(["endotherm", "exotherm"] as const).map((k) => {
-              const pk = sm[k] as { peak_mw: number; sample_t_c: number; area_mj: number; specific_j_per_g?: number } | null;
+              const pk = sm[k] as { peak_mw: number; sample_t_c: number; area_mj: number; specific_j_per_g?: number; onset_c?: number | null } | null;
               return (
                 <Metric
                   key={k}
-                  label={k === "endotherm" ? "Endotherm peak" : "Exotherm peak"}
+                  label={k === "endotherm" ? "Endotherm peak (onset)" : "Exotherm peak (onset)"}
                   value={pk ? `${pk.sample_t_c.toFixed(2)} °C` : "—"}
-                  hint={pk ? `${pk.peak_mw.toFixed(2)} mW · area ${pk.area_mj.toFixed(0)} mJ${pk.specific_j_per_g !== undefined ? ` (${pk.specific_j_per_g.toFixed(1)} J/g)` : ""}` : undefined}
+                  hint={pk ? `onset ${typeof pk.onset_c === "number" ? `${pk.onset_c.toFixed(2)} °C` : "—"} · ${pk.peak_mw.toFixed(2)} mW · area ${pk.area_mj.toFixed(0)} mJ${pk.specific_j_per_g !== undefined ? ` (${pk.specific_j_per_g.toFixed(1)} J/g)` : ""}` : undefined}
                 />
               );
             })}

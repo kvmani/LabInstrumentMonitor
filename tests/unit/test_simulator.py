@@ -110,7 +110,7 @@ def test_utm_known_answer_uts_and_fracture_order() -> None:
     prog = TensileProgram()
     spec = prog.specimen
     assert spec.area_mm2 == pytest.approx(28.2743, abs=1e-4)
-    grid = range(ms(245), ms(390), 200)
+    grid = range(ms(245), ms(400), 200)
     peak_t = max(grid, key=lambda t: prog.state(t)[1])
     _, force, ext = prog.state(peak_t)
     stress = force * 1000 / spec.area_mm2
@@ -124,6 +124,18 @@ def test_utm_known_answer_uts_and_fracture_order() -> None:
     assert e_last / spec.gauge_length_mm == pytest.approx(0.28, abs=0.001)
     assert f_last * 1000 / spec.area_mm2 == pytest.approx(390.0, abs=2.0)
     assert prog.state(fracture_t)[1] == 0.0
+
+
+def test_utm_two_stage_strain_rate_gives_a_dense_elastic_range() -> None:
+    prog = TensileProgram()
+    assert prog.elastic_s == pytest.approx(9.859, abs=0.001)
+    elastic = [
+        t
+        for t in range(ms(245), ms(400), 200)
+        if prog.state(t)[1] * 1000 / prog.specimen.area_mm2 < 0.5 * 480.0 and prog.state(t)[0] == 2
+    ]
+    assert len(elastic) >= 15  # enough points for a modulus fit at 5 Hz
+    assert prog.post_s > 5.0
 
 
 def test_utm_elastic_slope_and_yield() -> None:

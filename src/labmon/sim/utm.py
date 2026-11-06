@@ -14,8 +14,12 @@ Testing (2) 140 s   constant strain rate 2.0e-3 /s: elastic (E = 200 GPa) → yi
 Fractured(3) ~20 s  force ≈ 0, extension holds the plastic elongation, 5 Hz
 ==========  ======  =========================================================================
 
-Known answers (noise-free): maximum engineering stress 480.0 MPa = 13.572 kN at strain 0.18
-(extension 4.500 mm, test time 89.9825 s); fracture after the maximum at strain 0.28 (t = 140 s).
+Strain control in two stages, as in ISO 6892-1 practice: 2.5e-4 /s through the elastic range up
+to 0.25 % strain (~10 s, ~50 samples at 5 Hz, enough for a modulus fit), then 2.0e-3 /s.
+
+Known answers (noise-free): Young's modulus 200 GPa; 0.2 % offset yield Rp0.2 = 353.6 MPa
+(intersection of the curve with the 0.2 %-offset line); maximum engineering stress 480.0 MPa =
+13.572 kN at strain 0.18 (extension 4.500 mm); fracture after the maximum at strain 0.28.
 Engineering stress = force / A0 and strain = extension / L0, computed by the server from the
 geometry reported with each run.
 """
@@ -79,6 +83,8 @@ class TensileProgram:
     preload_s: float = 5.0
     preload_kn: float = 0.2
     strain_rate: float = 2.0e-3
+    elastic_strain_rate: float = 2.5e-4
+    elastic_until_strain: float = 0.0025
     cycle_s: float = 405.0  # whole seconds keep the 1 Hz and 5 Hz sample grids aligned
     specimen: TensileSpecimen = field(default_factory=TensileSpecimen)
 
@@ -87,8 +93,21 @@ class TensileProgram:
         return self.preload_kn * 1000 / self.specimen.area_mm2 / self.specimen.modulus_mpa
 
     @property
+    def elastic_s(self) -> float:
+        return (self.elastic_until_strain - self.preload_strain) / self.elastic_strain_rate
+
+    @property
     def test_s(self) -> float:
-        return (self.specimen.fracture_strain - self.preload_strain) / self.strain_rate
+        return (
+            self.elastic_s
+            + (self.specimen.fracture_strain - self.elastic_until_strain) / self.strain_rate
+        )
+
+    def strain_at(self, t: float) -> float:
+        """Engineering strain ``t`` seconds after the end of the preload."""
+        if t < self.elastic_s:
+            return self.preload_strain + self.elastic_strain_rate * t
+        return self.elastic_until_strain + self.strain_rate * (t - self.elastic_s)
 
     @property
     def post_s(self) -> float:
@@ -112,7 +131,7 @@ class TensileProgram:
             return 1, force, strain * sp.gauge_length_mm
         t -= self.preload_s
         if t < self.test_s:
-            strain = self.preload_strain + self.strain_rate * t
+            strain = self.strain_at(t)
             return 2, sp.stress(strain) * sp.area_mm2 / 1000, strain * sp.gauge_length_mm
         # fractured: elastic part recovers, plastic elongation remains
         plastic = sp.fracture_strain - sp.fracture_mpa / sp.modulus_mpa
@@ -156,6 +175,7 @@ class UtmSource:
                     "gauge_length_mm": sp.gauge_length_mm,
                 },
                 "strain_rate_per_s": p.strain_rate,
+                "elastic_strain_rate_per_s": p.elastic_strain_rate,
             },
         )
 

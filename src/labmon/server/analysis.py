@@ -124,6 +124,9 @@ def tensile(frames: list[Frame], geometry: dict[str, Any] | None, ended: bool) -
             max_force = force if max_force is None else max(max_force, force)
             if uts is None or stress > uts[0]:
                 uts = (stress, strain, fr.t)
+    modulus, rp02 = _elastic_and_offset_yield(
+        [p for p in points if p is not None and p[3] in (1, 2)], uts[0] if uts else None
+    )
     if fracture_t is None:
         reasons.append("fracture not observed")
     if not ended:
@@ -142,7 +145,15 @@ def tensile(frames: list[Frame], geometry: dict[str, Any] | None, ended: bool) -
         "uts_strain": None,
         "uts_time": None,
         "fracture_after_uts": None,
+        "modulus_gpa": None
+        if modulus is None or "gpa" not in modulus
+        else round(modulus["gpa"], 1),
+        "modulus_fit": modulus,
+        "rp02_mpa": None,
+        "rp02_strain": None,
     }
+    if complete and rp02 is not None:
+        summary.update(rp02_mpa=round(rp02[0], 1), rp02_strain=round(rp02[1], 5))
     if complete and uts is not None:
         summary.update(
             uts_mpa=round(uts[0], 2),
@@ -159,6 +170,56 @@ def tensile(frames: list[Frame], geometry: dict[str, Any] | None, ended: bool) -
         "summary": summary,
         "geometry": geometry,
     }
+
+
+def _elastic_and_offset_yield(
+    pts: list[list[Any]], uts: float | None
+) -> tuple[dict[str, Any] | None, tuple[float, float] | None]:
+    """Young's modulus by least squares on the elastic window (10–50 % of the maximum stress,
+    before the maximum) and the 0.2 % offset yield where the curve first falls below the offset
+    line ``stress = E · (strain − strain0 − 0.002)`` (linear interpolation between points)."""
+    if uts is None or uts <= 0:
+        return None, None
+    window: list[tuple[float, float]] = []
+    for x, y, *_ in pts:
+        if y >= 0.5 * uts:
+            break
+        if y >= 0.1 * uts:
+            window.append((x, y))
+    if len(window) < 5:
+        return {"points": len(window), "note": "too few elastic points for a modulus fit"}, None
+    n = len(window)
+    mx = sum(x for x, _ in window) / n
+    my = sum(y for _, y in window) / n
+    sxx = sum((x - mx) ** 2 for x, _ in window)
+    if sxx <= 0:
+        return None, None
+    e = sum((x - mx) * (y - my) for x, y in window) / sxx  # MPa per unit strain
+    b = my - e * mx
+    resid = sum((y - (e * x + b)) ** 2 for x, y in window) / max(n - 2, 1)
+    fit = {
+        "gpa": e / 1000.0,
+        "points": n,
+        "intercept_mpa": round(b, 3),
+        "rmse_mpa": round(resid**0.5, 3),
+        "window": "10–50 % of maximum stress, before the maximum",
+    }
+    strain0 = -b / e
+
+    def gap(x: float, y: float) -> float:  # curve minus offset line
+        return y - e * (x - strain0 - 0.002)
+
+    prev: tuple[float, float] | None = None
+    for x, y, *_ in pts:
+        if x <= strain0 + 0.002:
+            prev = (x, y)
+            continue
+        if prev is not None and gap(*prev) > 0 >= gap(x, y):
+            g0, g1 = gap(*prev), gap(x, y)
+            f = g0 / (g0 - g1)
+            return fit, (prev[1] + f * (y - prev[1]), prev[0] + f * (x - prev[0]))
+        prev = (x, y)
+    return fit, None
 
 
 # --- DSC ------------------------------------------------------------------------------------
@@ -213,7 +274,11 @@ def _peak(
         base1 = a[3] + (b[3] - a[3]) * (r1[0] - a[0]).total_seconds() / span
         area += 0.5 * ((r0[3] - base0) + (r1[3] - base1)) * dt  # mW·s = mJ
     pk = rows[i_pk]
+    onset = _onset(rows, i_pk)
     return {
+        "onset_c": None if onset is None else round(onset, 2),
+        "onset_method": "extrapolated: tangent at the steepest leading-edge point intersected "
+        "with a straight baseline fitted 12–4 K before the peak",
         "peak_mw": round(pk[3], 3),
         "sample_t_c": round(pk[1], 2),
         "time": format_utc(pk[0]),
@@ -221,6 +286,46 @@ def _peak(
         "area_method": f"linear baseline from {before_k:g} K before to {after_k:g} K after "
         "the peak (estimate)",
     }
+
+
+def _line(points: list[tuple[float, float]]) -> tuple[float, float] | None:
+    n = len(points)
+    if n < 2:
+        return None
+    mx = sum(x for x, _ in points) / n
+    my = sum(y for _, y in points) / n
+    sxx = sum((x - mx) ** 2 for x, _ in points)
+    if sxx <= 0:
+        return None
+    m = sum((x - mx) * (y - my) for x, y in points) / sxx
+    return m, my - m * mx
+
+
+def _onset(rows: list[tuple[datetime, float, float, float]], i_pk: int) -> float | None:
+    """Extrapolated onset temperature (sample temperature axis) of the peak at ``i_pk``."""
+    t_pk = rows[i_pk][1]
+    before = rows[: i_pk + 1]
+    base = [(r[1], r[3]) for r in before if 4.0 <= abs(r[1] - t_pk) <= 12.0]
+    edge = [r for r in before if abs(r[1] - t_pk) < 4.0]
+    fit = _line(base)
+    if fit is None or len(edge) < 2:
+        return None
+    best: tuple[float, float, float] | None = None  # (slope, x, y) of the steepest segment
+    for a, b in zip(edge, edge[1:], strict=False):
+        dx = b[1] - a[1]
+        if dx == 0:
+            continue
+        slope = (b[3] - a[3]) / dx
+        if best is None or abs(slope) > abs(best[0]):
+            best = (slope, (a[1] + b[1]) / 2, (a[3] + b[3]) / 2)
+    if best is None:
+        return None
+    m_t, x0, y0 = best
+    m_b, c_b = fit
+    if m_t == m_b:
+        return None
+    # tangent: y = y0 + m_t (x - x0); baseline: y = m_b x + c_b
+    return (c_b - y0 + m_t * x0) / (m_t - m_b)
 
 
 def dsc(
