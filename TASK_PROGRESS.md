@@ -56,6 +56,22 @@ access/expiry) + browser download.
 
 Gate after step 3: `scripts/check.sh --e2e` → 150 passed + 2 e2e passed.
 
+**Step 4 — spool ownership lock (done):** OS-level exclusive lock per spool (POSIX flock /
+Windows msvcrt); `backfill` refuses while the collector runs; `status`/`quarantine` open the
+spool read-only.
+
+**Step 5 — analysis depth (done):** UTM two-stage strain control (elastic 2.5e-4 /s);
+tensile modulus fit (≥15 points, within 5 % of 200 GPa) and Rp0.2 (within 3 MPa of 353.6);
+DSC extrapolated onsets (156.6 / 154.0 °C); furnace soak tolerance per run (within/out/
+unobserved, excursions with documented merge rules); history summary mean and coverage.
+
+**UI review (simulated, dev stack, 3 h playback + 30-day fixture):** furnace run 81.3 % within
+±5 °C with a −28 °C lag excursion and a +7.77 °C overshoot; 30-day fixture view shows the
+1270.3 °C spike, the 2.5 h dropout gap and 99.7 % coverage. Fixed: setpoint and tolerance band
+swamped bucketed views (tolerance now only at sample resolution; process value drawn on top).
+
+Gate: `scripts/check.sh --e2e` → 154 passed + 2 e2e; `--slow` 30-day evidence passed.
+
 ### Checkpoint 2 — owner requests of 2026-11-06 (simulated)
 
 | Request | Result | Evidence |

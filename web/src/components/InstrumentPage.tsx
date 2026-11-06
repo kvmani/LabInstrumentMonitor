@@ -571,7 +571,7 @@ function RunAnalysisView({ detail, s, tz, tzLabel, theme, canRecord, onChanged }
 }
 
 function ToleranceView({ t, tz, tzLabel }: { t: SoakTolerance; tz: string; tzLabel: string }) {
-  if (!t.soak) return <p className="sub">No soak segment in this run yet.</p>;
+  if (!t.soak) return <p className="sub" data-testid="soak-tolerance">No soak segment in this run yet.</p>;
   const pct = (v: number | null | undefined) => (typeof v === "number" ? `${(v * 100).toFixed(1)} %` : "—");
   const tol = t.rules.tolerance_c as number;
   return (

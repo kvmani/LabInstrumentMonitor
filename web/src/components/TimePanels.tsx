@@ -208,11 +208,13 @@ export function TimePanels(props: {
         const color = ch.role === "setpoint" ? palette[1]! : palette[j === 0 ? 0 : (j + 2) % palette.length]!;
         if (ch.role === "setpoint") {
           out.push({
-            name: ch.name, type: "line", step: "end", data: stepPts(s), showSymbol: false, connectNulls: false,
-            xAxisIndex: i, yAxisIndex: i, lineStyle: { width: 1.5, type: "dashed", color }, itemStyle: { color },
+            name: ch.name, type: "line", step: "end", data: stepPts(s), showSymbol: false, connectNulls: false, z: 1,
+            xAxisIndex: i, yAxisIndex: i, itemStyle: { color },
+            lineStyle: { width: s.mode === "bucket" ? 1 : 1.5, type: "dashed", color, opacity: s.mode === "bucket" ? 0.5 : 1 },
           });
           legend.push(ch.name);
-          if (p.tolerance_of === ch.key && tolerance) {
+          // a ±tolerance band is meaningful only at sample resolution, not across buckets
+          if (p.tolerance_of === ch.key && tolerance && s.mode === "raw") {
             const band = (sign: number): Pt[] => stepPts(s).map(([t, v]) => [t, v === null ? null : v + sign * tolerance]);
             const name = `Tolerance ±${tolerance} ${ch.unit}`;
             for (const sign of [1, -1]) {
@@ -262,7 +264,7 @@ export function TimePanels(props: {
         const name = s.mode === "bucket" ? `${ch.name} (mean)` : ch.name;
         legend.push(name);
         out.push({
-          name, type: "line", data: linePts(s), connectNulls: false, smooth: false,
+          name, type: "line", data: linePts(s), connectNulls: false, smooth: false, z: 3,
           showSymbol: s.mode === "raw" && (s.points?.length ?? 0) < 300, symbolSize: 4,
           xAxisIndex: i, yAxisIndex: i, lineStyle: { width: 1.6, color }, itemStyle: { color },
           markArea: j === 0 ? {
