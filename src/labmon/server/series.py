@@ -3,9 +3,10 @@
 * Ranges are half-open ``[start, end)`` and bounded.
 * Raw mode returns every committed sample with quality and clock flags; bad samples carry no
   plotted value but stay visible as diagnostics.
-* Bucket mode (M1: computed from raw rows; minute/hour rollups arrive in M2) returns count, valid
-  count, sum, mean, min/max **with their original timestamps**, first/last, so a one-sample peak
-  stays discoverable. A bucket is never labelled as a raw sample.
+* Bucket mode returns count, valid count, sum, mean, min/max **with their original timestamps**,
+  first/last, so a one-sample peak stays discoverable. Buckets of 60 s or more come from minute
+  rollups aggregated in SQL (``aggregation = rollup_1m``, see ``rollup.py``); finer buckets are
+  computed from raw rows (``raw_on_demand``). A bucket is never labelled as a raw sample.
 * Gaps are intervals with no samples longer than the channel's freshness window. They are computed
   from raw rows including the neighbours just outside the range, so a gap crossing a range edge is
   reported (clipped), and an *open* gap marks "no data since" up to ``min(end, now)``.
@@ -25,7 +26,7 @@ from sqlalchemy import Connection, Engine, desc, func, select, text
 
 from labmon.contracts.envelope import format_utc
 from labmon.server.models import AcquisitionEvent, Channel, Instrument, Sample
-from labmon.server.rollup import combine, gaps_from_minutes, minute_rows
+from labmon.server.rollup import rollup_view
 
 BUCKET_LADDER_S = (
     1,
@@ -111,25 +112,6 @@ def gap_threshold(cadence_s: float) -> float:
     return max(3.0 * cadence_s, 5.0)
 
 
-def _neighbours(
-    conn: Connection, channel_id: str, start: datetime, end: datetime
-) -> tuple[datetime | None, datetime | None]:
-    """Last sample time before the range and first at/after its end (index lookups)."""
-    before = conn.execute(
-        select(Sample.event_time)
-        .where(Sample.channel_id == channel_id, Sample.event_time < start)
-        .order_by(desc(Sample.event_time))
-        .limit(1)
-    ).scalar()
-    after = conn.execute(
-        select(Sample.event_time)
-        .where(Sample.channel_id == channel_id, Sample.event_time >= end)
-        .order_by(Sample.event_time)
-        .limit(1)
-    ).scalar()
-    return before, after
-
-
 def compute_gaps(
     conn: Connection, ch: Any, start: datetime, end: datetime, now: datetime
 ) -> list[dict[str, Any]]:
@@ -213,10 +195,10 @@ def channel_series(
     width = choose_bucket(end - start, budget)
     if width >= 60:
         # long window: minute rollups (+ raw for dirty and edge minutes) instead of raw scans
-        view = minute_rows(conn, ch.id, ch.data_type, start, end)
-        total = sum(r.n for r in view.rows)
-        if total > raw_limit:
-            before, after = _neighbours(conn, ch.id, start, end)
+        view = rollup_view(
+            conn, ch.id, ch.data_type, start, end, width, gap_threshold(ch.expected_cadence_s), now
+        )
+        if view.sample_count > raw_limit:
             snapshot = conn.execute(text("SELECT pg_snapshot_xmin(pg_current_snapshot())")).scalar()
             return {
                 "channel": _channel_meta(ch),
@@ -228,17 +210,15 @@ def channel_series(
                     "interval": "[start,end)",
                 },
                 "server_time": format_utc(now),
-                "sample_count": total,
+                "sample_count": view.sample_count,
                 "data_revision": f"snapshot:{snapshot}",
-                "gaps": gaps_from_minutes(
-                    view.rows, gap_threshold(ch.expected_cadence_s), before, after, start, end, now
-                ),
+                "gaps": view.gaps,
                 "events": _events(conn, ch.instrument_id, start, end),
                 "mode": "bucket",
                 "bucket_s": width,
                 "aggregation": "rollup_1m",
                 "rebuilding_minutes": view.rebuilding_minutes,
-                "buckets": combine(view.rows, width),
+                "buckets": view.buckets,
             }
     count = conn.execute(
         select(func.count())

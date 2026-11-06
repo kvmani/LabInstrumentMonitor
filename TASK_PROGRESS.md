@@ -27,6 +27,20 @@ field-verified, and no simulated pass is field acceptance.
   30-day known answers (count, peak value and time, dropout interval) asserted from the API;
   p50/p95 latency recorded; `scripts/check.sh --e2e` green after each step.
 
+**Step 1 result — rollups and the 30-day gate (simulated, done):**
+
+- Migration `0003` (expand-only): `sample_rollup_1m` cache + `rollup_dirty` revisioned queue;
+  ingest invalidates touched minutes in the sample transaction; `labmon-server rollup-worker`.
+- 30-day fixture `furnace-30d` (7 749 000 samples over 3 channels) loads in ~230 s, rollups in
+  ~96 s. The 30-day view keeps the one-sample peak (1270.33 °C at 2026-09-18T12:34:56Z) and
+  reports exactly one gap for the 2.5 h dropout.
+- Latency (warm, dev container, sequential): 3-series instrument view p50 0.40 s / p95 0.46 s;
+  **8-series p50 1.01 s / p95 1.12 s** (target ≤ 3 s). Cold single series 0.14 s. First version
+  read 43 k minute rows into Python (p95 2.28 s for 3 series); aggregation and gap detection
+  now run in SQL with raw fallback only for dirty and edge minutes.
+- Defect found by the equivalence test and fixed: min/max ties across a recomputed edge minute
+  and an aggregated partial went to the later timestamp.
+
 ### Checkpoint 2 — owner requests of 2026-11-06 (simulated)
 
 | Request | Result | Evidence |

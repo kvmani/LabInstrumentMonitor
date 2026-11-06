@@ -150,7 +150,8 @@ function SeriesSummary({ s, ch, tz, tzLabel }: { s: Series; ch: ChannelStatus; t
       {max && ` · max ${formatNumber(ch, max[0])} ${ch.unit} at ${formatTime(max[1], tz, true)} ${tzLabel}`}
       {min && ` · min ${formatNumber(ch, min[0])} ${ch.unit} at ${formatTime(min[1], tz, true)}`} ·{" "}
       {s.gaps.length === 0 ? "no gaps" : `${s.gaps.length} gap${s.gaps.length > 1 ? "s" : ""} (${formatDuration(gapTotal)} without data)`} ·{" "}
-      {s.mode === "raw" ? "raw samples" : `aggregated in ${s.bucket_s} s buckets (band = min–max, line = mean)`}
+      {s.mode === "raw" ? "raw samples" : `aggregated in ${formatDuration(s.bucket_s ?? 0)} buckets (band = min–max, line = mean)`}
+      {s.rebuilding_minutes ? ` · ${s.rebuilding_minutes} recent minute${s.rebuilding_minutes > 1 ? "s" : ""} aggregated from raw while rollups catch up` : ""}
     </p>
   );
 }

@@ -70,16 +70,18 @@ def test_30_day_view_keeps_peak_and_dropout(engine: Engine, db_url: str) -> None
         "source_recovered",
     ]
 
-    # latency: the full instrument view (3 series) many times, warm
-    timings = []
-    for _ in range(15):
-        t = time.perf_counter()
-        for ch in ("pv", "sp", "phase"):
-            get(ch)
-        timings.append(time.perf_counter() - t)
-    timings.sort()
-    p50 = statistics.median(timings)
-    p95 = timings[int(0.95 * (len(timings) - 1))]
+    def p50_p95(chs: tuple[str, ...], runs: int = 15) -> tuple[float, float]:
+        timings = []
+        for _ in range(runs):
+            t = time.perf_counter()
+            for ch in chs:
+                get(ch)
+            timings.append(time.perf_counter() - t)
+        timings.sort()
+        return statistics.median(timings), timings[int(0.95 * (len(timings) - 1))]
+
+    p50, p95 = p50_p95(("pv", "sp", "phase"))  # the instrument workspace
+    p50_8, p95_8 = p50_p95(("pv", "sp", "phase", "pv", "sp", "phase", "pv", "sp"))  # §10 limit
     record = {
         "evidence": "simulated",
         "fixture": "furnace-30d",
@@ -90,6 +92,9 @@ def test_30_day_view_keeps_peak_and_dropout(engine: Engine, db_url: str) -> None
         "cold_single_series_s": round(cold_s, 3),
         "warm_3_series_view_p50_s": round(p50, 3),
         "warm_3_series_view_p95_s": round(p95, 3),
+        "warm_8_series_p50_s": round(p50_8, 3),
+        "warm_8_series_p95_s": round(p95_8, 3),
+        "note": "sequential requests via the in-process ASGI client on the dev container",
         "buckets": len(pv["buckets"]),
         "bucket_s": pv["bucket_s"],
     }
@@ -97,4 +102,4 @@ def test_30_day_view_keeps_peak_and_dropout(engine: Engine, db_url: str) -> None
     out.mkdir(exist_ok=True)
     (out / "perf-furnace-30d.json").write_text(json.dumps(record, indent=2))
     print(json.dumps(record, indent=2))
-    assert p95 < 3.0  # SPECIFICATIONS §10 target for a warmed 30-day view
+    assert p95_8 < 3.0  # SPECIFICATIONS §10: 30-day plot, up to eight series, warm p95 <= 3 s

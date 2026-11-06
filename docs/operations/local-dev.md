@@ -25,7 +25,26 @@ export LABMON_ENV=development         # enables bootstrap-dev and /api/docs; coo
 .venv/bin/labmon-server bootstrap-dev --password 'choose-a-dev-password' --with-dsc
 .venv/bin/labmon-server serve --port 8000
 .venv/bin/labmon-collector run --config .devdata/collector/collector.toml
+.venv/bin/labmon-server rollup-worker        # keeps minute rollups current (separate process)
 ```
+
+The rollup worker is a separate process so aggregation never blocks API workers. Without it the
+API stays correct (unprocessed minutes are aggregated from raw rows and reported as
+`rebuilding_minutes`), but long views get slower. `--once` drains the queue and exits.
+
+## 30-day fixture (M2 evidence)
+
+```bash
+.venv/bin/labmon-server load-fixture furnace-30d     # ~4 min: 7.7 M samples, original times
+.venv/bin/labmon-server rollup-worker --once         # ~2 min: 130 k minute rollups
+LABMON_RUN_SLOW=1 .venv/bin/pytest -s tests/perf     # or: scripts/check.sh --slow
+```
+
+The fixture instrument `furnace-hist` (lab-demo) holds 30 days from 2026-09-01 with a one-sample
++420 °C peak on day 17 and a 2.5 h dropout on day 9; its assignment covers only that window so it
+never looks live. Open it in the UI and choose a custom range (2026-09-01 to 2026-10-01). The
+slow suite asserts the peak value and time and the exact dropout gap, and writes latency to
+`test-results/perf-furnace-30d.json`.
 
 `bootstrap-dev` creates lab `lab-demo`, the default fleet — `furnace-01` (`sim-furnace`),
 `utm-01` (`sim-utm`) and `dil-01` (`sim-dilatometer`) — collector `col-bay1-01` with a fresh

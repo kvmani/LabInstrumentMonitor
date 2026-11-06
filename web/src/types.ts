@@ -196,6 +196,8 @@ export interface Series {
   data_revision: number | null;
   mode: "raw" | "bucket";
   bucket_s?: number;
+  aggregation?: "rollup_1m" | "raw_on_demand";
+  rebuilding_minutes?: number;
   points?: RawPoint[];
   buckets?: Bucket[];
   gaps: Gap[];

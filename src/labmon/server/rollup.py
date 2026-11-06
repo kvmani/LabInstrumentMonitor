@@ -238,45 +238,82 @@ def _row_values(cid: str, r: MinuteRow, now: datetime) -> dict[str, Any]:
 # --- query side -------------------------------------------------------------------------------
 
 
+_CLEAN_BUCKETS_SQL = """
+SELECT date_bin(make_interval(secs => :w), r.bucket, :origin) AS bucket,
+  sum(r.n)::int AS n, sum(r.n_valid)::int AS n_valid, sum(r.n_uncertain)::int AS n_uncertain,
+  sum(r.v_sum) AS v_sum,
+  min(r.v_min) AS v_min,
+  (array_agg(r.t_min ORDER BY r.v_min ASC, r.t_min) FILTER (WHERE r.v_min IS NOT NULL))[1]
+    AS t_min,
+  max(r.v_max) AS v_max,
+  (array_agg(r.t_max ORDER BY r.v_max DESC, r.t_max) FILTER (WHERE r.v_max IS NOT NULL))[1]
+    AS t_max,
+  (array_agg(r.v_first ORDER BY r.bucket) FILTER (WHERE r.v_first IS NOT NULL))[1] AS v_first,
+  (array_agg(r.v_last ORDER BY r.bucket DESC) FILTER (WHERE r.v_last IS NOT NULL))[1] AS v_last,
+  min(r.t_first) AS t_first, max(r.t_last) AS t_last
+FROM sample_rollup_1m r
+WHERE r.channel_id = :cid AND r.bucket >= :m0 AND r.bucket < :m1
+  AND NOT EXISTS (SELECT 1 FROM rollup_dirty d
+                  WHERE d.channel_id = r.channel_id AND d.bucket = r.bucket)
+GROUP BY 1 ORDER BY 1
+"""
+
+# Gaps between consecutive *clean* minutes and inside each clean minute. Pairs that span a dirty
+# minute are discarded by the caller, which recomputes those regions from raw rows.
+_CLEAN_GAPS_SQL = """
+WITH m AS (
+  SELECT r.bucket, r.t_first, r.t_last, r.gap_start, r.gap_s,
+         lag(r.t_last) OVER (ORDER BY r.bucket) AS prev_last
+  FROM sample_rollup_1m r
+  WHERE r.channel_id = :cid AND r.bucket >= :m0 AND r.bucket < :m1
+    AND NOT EXISTS (SELECT 1 FROM rollup_dirty d
+                    WHERE d.channel_id = r.channel_id AND d.bucket = r.bucket)
+)
+SELECT prev_last AS a, t_first AS b FROM m
+  WHERE prev_last IS NOT NULL AND t_first - prev_last > make_interval(secs => :thr)
+UNION ALL
+SELECT gap_start AS a, gap_start + make_interval(secs => gap_s) AS b FROM m
+  WHERE gap_s > :thr
+"""
+
+
 @dataclass
-class MinuteView:
-    rows: list[MinuteRow]
+class RollupView:
+    buckets: list[dict[str, Any]]
+    gaps: list[dict[str, Any]]
+    sample_count: int
     rebuilding_minutes: int
 
 
-def minute_rows(
-    conn: Connection, channel_id: str, data_type: str, start: datetime, end: datetime
-) -> MinuteView:
-    """Complete minute rows for ``[start, end)``: clean rollups plus raw for dirty and edges."""
+def _neighbour_times(
+    conn: Connection, channel_id: str, lo: datetime, hi: datetime
+) -> tuple[datetime | None, datetime | None]:
+    before = conn.execute(
+        text("SELECT max(event_time) FROM sample WHERE channel_id = :c AND event_time < :lo"),
+        {"c": channel_id, "lo": lo},
+    ).scalar()
+    after = conn.execute(
+        text("SELECT min(event_time) FROM sample WHERE channel_id = :c AND event_time >= :hi"),
+        {"c": channel_id, "hi": hi},
+    ).scalar()
+    return before, after
+
+
+def rollup_view(
+    conn: Connection,
+    channel_id: str,
+    data_type: str,
+    start: datetime,
+    end: datetime,
+    width_s: int,
+    threshold_s: float,
+    now: datetime,
+) -> RollupView:
+    """Buckets and gaps for ``[start, end)`` using clean rollups aggregated in SQL, plus raw
+    computation for dirty minutes and the partial minutes at the range edges."""
     m0, m1 = ceil_minute(start), floor_minute(end)
-    if m1 <= m0:
-        return MinuteView(raw_minutes(conn, channel_id, data_type, start, end), 0)
-    cached = {
-        r.bucket: MinuteRow(
-            bucket=r.bucket,
-            n=r.n,
-            n_valid=r.n_valid,
-            n_uncertain=r.n_uncertain,
-            v_sum=r.v_sum,
-            v_min=r.v_min,
-            t_min=r.t_min,
-            v_max=r.v_max,
-            t_max=r.t_max,
-            v_first=r.v_first,
-            v_last=r.v_last,
-            t_first=r.t_first,
-            t_last=r.t_last,
-            gap_start=r.gap_start,
-            gap_s=r.gap_s,
-        )
-        for r in conn.execute(
-            select(SampleRollup1m).where(
-                SampleRollup1m.channel_id == channel_id,
-                SampleRollup1m.bucket >= m0,
-                SampleRollup1m.bucket < m1,
-            )
-        )
-    }
+    if m1 < m0:
+        m0 = m1 = start
     dirty = sorted(
         b
         for (b,) in conn.execute(
@@ -287,23 +324,93 @@ def minute_rows(
             )
         )
     )
-    fresh: list[MinuteRow] = []
+    chunks: list[tuple[datetime, datetime]] = [(start, m0)]
     if dirty:
-        for lo, hi in _chunks(dirty):
-            wanted = {b for b in dirty if lo <= b < hi}
-            fresh += [
-                r for r in raw_minutes(conn, channel_id, data_type, lo, hi) if r.bucket in wanted
-            ]
-            for b in wanted:
-                cached.pop(b, None)
-    rows = (
-        raw_minutes(conn, channel_id, data_type, start, m0)
-        + list(cached.values())
-        + fresh
-        + raw_minutes(conn, channel_id, data_type, m1, end)
-    )
-    rows.sort(key=lambda r: r.bucket)
-    return MinuteView(rows, len(dirty))
+        chunks += _chunks(dirty)
+    chunks.append((m1, end))
+    partials: list[MinuteRow] = []
+    if m1 > m0:
+        partials = [
+            MinuteRow(
+                bucket=r.bucket,
+                n=r.n,
+                n_valid=r.n_valid,
+                n_uncertain=r.n_uncertain,
+                v_sum=r.v_sum,
+                v_min=r.v_min,
+                t_min=r.t_min,
+                v_max=r.v_max,
+                t_max=r.t_max,
+                v_first=r.v_first,
+                v_last=r.v_last,
+                t_first=r.t_first,
+                t_last=r.t_last,
+                gap_start=None,
+                gap_s=None,
+            )
+            for r in conn.execute(
+                text(_CLEAN_BUCKETS_SQL),
+                {"w": width_s, "origin": ORIGIN, "cid": channel_id, "m0": m0, "m1": m1},
+            )
+        ]
+    dirty_set = set(dirty)
+    raw_rows: list[MinuteRow] = []  # rows that replace missing/dirty rollups in buckets
+    raw_spans: list[tuple[datetime, datetime, list[MinuteRow]]] = []  # all rows, for gaps
+    for idx, (lo, hi) in enumerate(chunks):
+        rows = raw_minutes(conn, channel_id, data_type, lo, hi)
+        edge = idx in (0, len(chunks) - 1)
+        raw_rows += rows if edge else [r for r in rows if r.bucket in dirty_set]
+        raw_spans.append((lo, hi, rows))
+    # (bucket, first sample time): partials and edge minutes can share a display bucket, and
+    # min/max ties must go to the earliest original timestamp
+    allrows = sorted(partials + raw_rows, key=lambda r: (r.bucket, r.t_first))
+    buckets = combine(allrows, width_s)
+
+    gap_set: set[tuple[datetime, datetime, bool]] = set()
+    horizon = min(end, now)
+
+    def add(a: datetime, b: datetime, open_: bool = False) -> None:
+        if (b - a).total_seconds() > threshold_s:
+            gap_set.add((a, b, open_))
+
+    if m1 > m0:
+        for a, b in conn.execute(
+            text(_CLEAN_GAPS_SQL), {"cid": channel_id, "m0": m0, "m1": m1, "thr": threshold_s}
+        ):
+            if not any(a < hi and b > lo for lo, hi, _ in raw_spans[1:-1]):
+                add(a, b)
+    # raw regions (edges and dirty chunks): local gaps plus the gaps to their neighbours
+    for lo, hi, rows in raw_spans:
+        before, after = _neighbour_times(conn, channel_id, lo, hi)
+        if not rows:
+            if before is not None:
+                if after is not None:
+                    add(before, after)
+                elif hi >= end:
+                    add(before, horizon, True)
+            continue
+        if before is not None:
+            add(before, rows[0].t_first)
+        for x, y in zip(rows, rows[1:], strict=False):
+            add(x.t_last, y.t_first)
+        for r in rows:
+            if r.gap_s is not None and r.gap_start is not None:
+                add(r.gap_start, r.gap_start + timedelta(seconds=r.gap_s))
+        if after is not None:
+            add(rows[-1].t_last, after)
+        elif hi >= end and horizon > rows[-1].t_last:
+            add(rows[-1].t_last, horizon, True)
+    gaps = [
+        {
+            "start": format_utc(max(a, start)),
+            "end": format_utc(min(b, end)),
+            "duration_s": round((b - a).total_seconds(), 3),
+            "open": o,
+        }
+        for a, b, o in sorted(gap_set)
+        if b > start and a < end
+    ]
+    return RollupView(buckets, gaps, sum(r.n for r in allrows), len(dirty))
 
 
 def combine(rows: list[MinuteRow], width_s: int) -> list[dict[str, Any]]:
@@ -334,20 +441,30 @@ def combine(rows: list[MinuteRow], width_s: int) -> list[dict[str, Any]]:
                 "last": None,
                 "tf": r.t_first,
                 "tl": r.t_last,
+                "first_at": r.t_first,
+                "last_at": r.t_last,
             }
         cur["n"] += r.n
         cur["nv"] += r.n_valid
         cur["nu"] += r.n_uncertain
         if r.v_sum is not None:
             cur["sum"] = (cur["sum"] or 0.0) + r.v_sum
-        if r.v_min is not None and (cur["min"] is None or r.v_min < cur["min"]):
+        if r.v_min is not None and (
+            cur["min"] is None
+            or r.v_min < cur["min"]
+            or (r.v_min == cur["min"] and r.t_min is not None and r.t_min < cur["tmin"])
+        ):
             cur["min"], cur["tmin"] = r.v_min, r.t_min
-        if r.v_max is not None and (cur["max"] is None or r.v_max > cur["max"]):
+        if r.v_max is not None and (
+            cur["max"] is None
+            or r.v_max > cur["max"]
+            or (r.v_max == cur["max"] and r.t_max is not None and r.t_max < cur["tmax"])
+        ):
             cur["max"], cur["tmax"] = r.v_max, r.t_max
-        if cur["first"] is None and r.v_first is not None:
-            cur["first"] = r.v_first
-        if r.v_last is not None:
-            cur["last"] = r.v_last
+        if r.v_first is not None and (cur["first"] is None or r.t_first < cur["first_at"]):
+            cur["first"], cur["first_at"] = r.v_first, r.t_first
+        if r.v_last is not None and (cur["last"] is None or r.t_last > cur["last_at"]):
+            cur["last"], cur["last_at"] = r.v_last, r.t_last
         cur["tf"] = min(cur["tf"], r.t_first)
         cur["tl"] = max(cur["tl"], r.t_last)
     if cur is not None:
@@ -376,60 +493,17 @@ def _finish(c: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def gaps_from_minutes(
-    rows: list[MinuteRow],
-    threshold_s: float,
-    before: datetime | None,
-    after: datetime | None,
-    start: datetime,
-    end: datetime,
-    now: datetime,
-) -> list[dict[str, Any]]:
-    gaps: list[tuple[datetime, datetime, bool]] = []
-
-    def add(a: datetime, b: datetime, open_: bool = False) -> None:
-        if (b - a).total_seconds() > threshold_s:
-            gaps.append((a, b, open_))
-
-    horizon = min(end, now)
-    if not rows:
-        if before is not None:
-            add(before, after if after is not None else horizon, after is None)
-    else:
-        if before is not None:
-            add(before, rows[0].t_first)
-        for a, b in zip(rows, rows[1:], strict=False):
-            add(a.t_last, b.t_first)
-        for r in rows:
-            if r.gap_s is not None and r.gap_start is not None:
-                add(r.gap_start, r.gap_start + timedelta(seconds=r.gap_s))
-        if after is not None:
-            add(rows[-1].t_last, after)
-        elif horizon > rows[-1].t_last:
-            add(rows[-1].t_last, horizon, True)
-    gaps.sort(key=lambda g: g[0])
-    return [
-        {
-            "start": format_utc(max(a, start)),
-            "end": format_utc(min(b, end)),
-            "duration_s": round((b - a).total_seconds(), 3),
-            "open": o,
-        }
-        for a, b, o in gaps
-    ]
-
-
 def pending_count(conn: Connection) -> int:
     return int(conn.execute(text("SELECT count(*) FROM rollup_dirty")).scalar_one())
 
 
 __all__ = [
     "MinuteRow",
+    "RollupView",
     "combine",
-    "gaps_from_minutes",
     "mark_dirty",
-    "minute_rows",
     "pending_count",
     "process_dirty",
     "raw_minutes",
+    "rollup_view",
 ]
