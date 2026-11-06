@@ -170,11 +170,20 @@ between the recovery target and the stop stays a gap.
 Note: running the full gate in parallel with a soak exhausted the container's memory (restart).
 Run soaks on their own.
 
+**20-minute soak (simulated, 2026-11-06 22:48–23:08 UTC):** 4 vCPU / 15 GiB container, CPython
+3.12.3, PostgreSQL 16.15, demo fleet incl. DSC. Command: `labmon-soak --hours 0.333 --interval
+10 --restart-api-every 4`. Result **OK**: RSS flat (API 89.8→92.4 MB, worker 75.9→77.3, collector
+44.9→45.1), descriptors flat, steady p95 ≤ 1.007 s over 105 intervals, 4 API kills recovered in
+10.5–20.7 s (10 s resolution), outbox drained, 20,166 records with 0 holes and 0 conflicts. An
+earlier run "failed" because of a flaw in the verdict (recovery taken from the interval that
+spans the restart). The flaw was fixed with a regression test (commit 6df879a). Re-scored, that
+run also passes (steady p95 1.009 s, recovery ≤ 30.7 s at 15 s resolution).
+
 ### Current limits
 
 - Nothing is staged or field-verified. The release rehearsal ran in a temporary root without
   real systemd, reboot or client-workstation TLS. The Windows installer has never run on Windows.
-- The longest soak recorded is 20 min (see below), not 72 h.
+- The longest soak recorded is 20 min (above), not 72 h.
 - There is no command to re-send acknowledged records after a database restore.
 - DSC peak areas use a straight baseline and are labelled estimates.
 - The CI workflow has never been dispatched on GitHub; only local gate runs are recorded.
