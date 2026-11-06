@@ -47,7 +47,6 @@ class CollectorConfig(BaseModel):
     spool_path: Path
     ca_file: Path | None = None
     allow_insecure_http: bool = False  # development only; production uses approved HTTPS
-    cadence_s: float = Field(default=1.0, gt=0.05, le=3600)
     heartbeat_s: float = Field(default=10.0, gt=0.5, le=300)
     flush_s: float = Field(default=1.0, gt=0.05, le=60)
     request_timeout_s: float = Field(default=10.0, gt=0.5, le=120)

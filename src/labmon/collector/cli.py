@@ -65,7 +65,7 @@ def cmd_run(cfg: CollectorConfig) -> int:
     signal.signal(signal.SIGINT, _stop)
     signal.signal(signal.SIGTERM, _stop)
 
-    acq = Acquisition(outbox, clock, cfg.instruments, cadence_s=cfg.cadence_s, simulated=True)
+    acq = Acquisition(outbox, clock, cfg.instruments, simulated=True)
     up_client, hb_client = make_client(cfg), make_client(cfg)
     uploader = Uploader(
         outbox, up_client, token, clock, max_backoff_s=cfg.max_backoff_s, flush_s=cfg.flush_s

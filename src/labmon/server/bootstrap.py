@@ -192,7 +192,6 @@ def write_collector_config(
         'token_file = "collector.token"',
         f"spool_path = {_toml_str(spool_name)}",
         f"allow_insecure_http = {'true' if server_url.startswith('http://') else 'false'}",
-        "cadence_s = 1.0",
         "heartbeat_s = 10.0",
         "",
     ]

@@ -102,6 +102,8 @@ class EventType(StrEnum):
     SCHEDULE_SKIPPED = "schedule_skipped"
     ACQUISITION_LOST_INTERVAL = "acquisition_lost_interval"
     CLOCK_JUMP = "clock_jump"
+    RUN_STARTED = "run_started"
+    RUN_ENDED = "run_ended"
 
 
 ScalarValue = float | bool | int | None
