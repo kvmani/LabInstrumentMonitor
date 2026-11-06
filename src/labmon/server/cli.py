@@ -25,6 +25,9 @@ def main(argv: list[str] | None = None) -> int:
     worker = sub.add_parser("rollup-worker", help="maintain minute rollups (separate process)")
     worker.add_argument("--once", action="store_true", help="drain the queue once and exit")
     worker.add_argument("--interval", type=float, default=2.0)
+    fixture = sub.add_parser("load-fixture", help="development/test only: load a long fixture")
+    fixture.add_argument("key", help="fixture key, e.g. furnace-30d")
+    fixture.add_argument("--channels", default=None, help="comma-separated channel keys")
     boot = sub.add_parser("bootstrap-dev", help="development-only demo data and collector config")
     boot.add_argument("--out", type=Path, default=Path(".devdata/collector"))
     boot.add_argument("--server-url", default="http://127.0.0.1:8000")
@@ -52,6 +55,19 @@ def main(argv: list[str] | None = None) -> int:
             server_header=False,
             log_level="info",
         )
+        return 0
+    if args.command == "load-fixture":
+        if not settings.dev_tools_allowed:
+            print(
+                "load-fixture refuses to run unless LABMON_ENV is development or test",
+                file=sys.stderr,
+            )
+            return 2
+        from labmon.server.db import make_engine
+        from labmon.server.fixture_loader import load_fixture
+
+        chans = tuple(args.channels.split(",")) if args.channels else None
+        print(load_fixture(make_engine(settings.database_url, pool_size=2), args.key, chans))
         return 0
     if args.command == "rollup-worker":
         from labmon.server.db import make_engine

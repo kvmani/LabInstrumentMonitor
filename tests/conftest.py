@@ -61,6 +61,9 @@ def pg_server() -> Iterator[PgServer]:
         yield PgServer(cluster.server_url, cluster)
     finally:
         cluster.reset()
+        import shutil
+
+        shutil.rmtree(datadir, ignore_errors=True)
 
 
 @pytest.fixture(scope="session")

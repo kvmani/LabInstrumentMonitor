@@ -63,6 +63,7 @@ testpaths = ["tests"]
 markers = [
   "integration: needs a real PostgreSQL 16 server",
   "e2e: starts real processes and a browser",
+  "slow: long fixtures and latency evidence (LABMON_RUN_SLOW=1)",
 ]
 addopts = "-ra"
 filterwarnings = [
