@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import Engine, select, text, update
+from sqlalchemy import Engine, desc, select, text, update
 from sqlalchemy.exc import OperationalError
 
 from labmon import __version__
@@ -30,7 +30,8 @@ from labmon.contracts.envelope import (
     canonical_json,
     format_utc,
 )
-from labmon.server import migrate
+from labmon.server import analysis, migrate
+from labmon.server.analysis import load_frames
 from labmon.server.db import make_engine
 from labmon.server.ingest import (
     IngestError,
@@ -40,7 +41,8 @@ from labmon.server.ingest import (
     parse_batch,
     read_bounded,
 )
-from labmon.server.models import Channel, Collector, Instrument
+from labmon.server.models import AcquisitionEvent, Channel, Collector, Instrument, Run
+from labmon.server.runs import list_runs, run_view
 from labmon.server.security import (
     CSRF_HEADER,
     SESSION_COOKIE,
@@ -61,7 +63,7 @@ from labmon.server.series import (
     parse_range,
 )
 from labmon.server.settings import Settings
-from labmon.server.status import StatusConfig, instrument_status
+from labmon.server.status import StatusConfig, instrument_status, latest_display
 
 log = logging.getLogger("labmon.server")
 
@@ -356,6 +358,108 @@ def create_app(
                 raise HTTPException(404, "channel not found")
             scoped_instrument(conn, p, ch.instrument_id)
             return channel_series(conn, channel_id, s, e, now(), series_limits, max_points)
+
+    @app.get("/api/v1/instruments/{instrument_id}/runs")
+    def get_runs(
+        instrument_id: str, p: User, limit: Annotated[int, Query(ge=1, le=200)] = 50
+    ) -> dict[str, Any]:
+        at = now()
+        with engine.connect() as conn:
+            scoped_instrument(conn, p, instrument_id)
+            return {
+                "server_time": format_utc(at),
+                "items": list_runs(conn, instrument_id, at, limit),
+            }
+
+    @app.get("/api/v1/instruments/{instrument_id}/events")
+    def get_events(
+        instrument_id: str, p: User, limit: Annotated[int, Query(ge=1, le=500)] = 100
+    ) -> dict[str, Any]:
+        with engine.connect() as conn:
+            scoped_instrument(conn, p, instrument_id)
+            rows = conn.execute(
+                select(
+                    AcquisitionEvent.event_type,
+                    AcquisitionEvent.capture_time,
+                    AcquisitionEvent.receive_time,
+                    AcquisitionEvent.detail,
+                    AcquisitionEvent.collector_id,
+                    AcquisitionEvent.spool_epoch,
+                    AcquisitionEvent.seq,
+                )
+                .where(AcquisitionEvent.instrument_id == instrument_id)
+                .order_by(desc(AcquisitionEvent.capture_time), desc(AcquisitionEvent.seq))
+                .limit(limit)
+            ).all()
+        return {
+            "items": [
+                {
+                    "type": r[0],
+                    "at": format_utc(r[1]),
+                    "received_at": format_utc(r[2]),
+                    "detail": r[3],
+                    "identity": f"{r[4]}:{r[5]}:{r[6]}",
+                }
+                for r in rows
+            ]
+        }
+
+    @app.get("/api/v1/runs/{run_id}")
+    def get_run(run_id: str, p: User) -> dict[str, Any]:
+        at = now()
+        with engine.connect().execution_options(isolation_level="REPEATABLE READ") as conn:
+            run = conn.execute(select(Run).where(Run.id == run_id)).first()
+            if run is None:
+                raise HTTPException(404, "run not found")
+            scoped_instrument(conn, p, run.instrument_id)
+            view = run_view(run, at)
+            display = latest_display(conn, run.instrument_id)
+            channels = {
+                c.key: c.id
+                for c in conn.execute(
+                    select(Channel.key, Channel.id).where(
+                        Channel.instrument_id == run.instrument_id
+                    )
+                )
+            }
+            end = run.ended_at or at
+            analysis_out: dict[str, Any] | None = None
+            try:
+                if display["analysis"] == "tensile":
+                    frames = load_frames(
+                        conn,
+                        run.instrument_id,
+                        channels,
+                        run.started_at,
+                        end + timedelta(milliseconds=1),
+                    )
+                    analysis_out = analysis.tensile(
+                        frames,
+                        (run.run_metadata or {}).get("geometry"),
+                        ended=run.ended_at is not None,
+                    )
+                elif display["analysis"] == "dsc":
+                    frames = load_frames(
+                        conn,
+                        run.instrument_id,
+                        channels,
+                        run.started_at,
+                        end + timedelta(milliseconds=1),
+                    )
+                    mass = (run.run_metadata or {}).get("sample_mass_mg")
+                    analysis_out = analysis.dsc(
+                        frames,
+                        display["sign_convention"],
+                        float(mass) if isinstance(mass, int | float) else None,
+                    )
+            except analysis.TooLarge as exc:
+                raise HTTPException(413, str(exc)) from exc
+        return {
+            "server_time": format_utc(at),
+            "run": view,
+            "display": display,
+            "analysis": analysis_out,
+        }
 
     @app.get("/api/v1/instruments/{instrument_id}/export.csv")
     def export_csv(

@@ -100,6 +100,8 @@ class Channel(Base):
     display_precision: Mapped[int] = mapped_column(Integer)
     enum_labels: Mapped[dict[str, str] | None] = mapped_column(JSONB)
     sort_order: Mapped[int] = mapped_column(Integer, server_default="0")
+    display_format: Mapped[str] = mapped_column(Text, server_default="fixed")
+    note: Mapped[str | None] = mapped_column(Text)
 
 
 class Collector(Base):
@@ -289,3 +291,28 @@ class AuditEvent(Base):
     action: Mapped[str] = mapped_column(Text)
     target: Mapped[str | None] = mapped_column(Text)
     detail: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+
+
+class Run(Base):
+    """A run record. Instrument-reported runs come from run_started/run_ended events (the
+    simulator reports one per program cycle); user-created runs are a later milestone."""
+
+    __tablename__ = "run"
+    __table_args__ = (
+        UniqueConstraint("instrument_id", "run_key"),
+        Index("ix_run_instrument_started", "instrument_id", "started_at"),
+        CheckConstraint("source IN ('instrument','user')", name="source"),
+    )
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    instrument_id: Mapped[str] = mapped_column(ForeignKey("instrument.id"))
+    run_key: Mapped[str] = mapped_column(Text)
+    name: Mapped[str] = mapped_column(Text)
+    kind: Mapped[str] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(Text)
+    simulated: Mapped[bool] = mapped_column(Boolean)
+    started_at: Mapped[datetime] = mapped_column(TS)
+    planned_end_at: Mapped[datetime | None] = mapped_column(TS)
+    ended_at: Mapped[datetime | None] = mapped_column(TS)
+    end_reason: Mapped[str | None] = mapped_column(Text)
+    run_metadata: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB)
+    first_seen_at: Mapped[datetime] = mapped_column(TS)

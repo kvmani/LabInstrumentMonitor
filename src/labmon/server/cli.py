@@ -26,6 +26,7 @@ def main(argv: list[str] | None = None) -> int:
     boot.add_argument("--out", type=Path, default=Path(".devdata/collector"))
     boot.add_argument("--server-url", default="http://127.0.0.1:8000")
     boot.add_argument("--password", default=None, help="scientist password (>= 12 chars)")
+    boot.add_argument("--with-dsc", action="store_true", help="add the opt-in DSC profile")
     boot.add_argument("--with-ambient", action="store_true", help="also seed the smoke fixture")
     boot.add_argument("--rotate-token", action="store_true")
     args = parser.parse_args(argv)
@@ -66,6 +67,7 @@ def main(argv: list[str] | None = None) -> int:
             args.password,
             args.with_ambient,
             args.rotate_token,
+            with_dsc=args.with_dsc,
         )
         print(f"collector config: {result['collector_config']}")
         print(f"sign in as: {result['username']} / {result['password']}")

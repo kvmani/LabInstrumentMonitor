@@ -50,6 +50,31 @@ FURNACE_SEED = InstrumentSeed(
     asset_id="SIM-F01",
     location="Bay 1 (virtual)",
 )
+UTM_SEED = InstrumentSeed(
+    "utm-01",
+    "Universal testing machine U-01",
+    "sim-utm",
+    11,
+    asset_id="SIM-U01",
+    location="Bay 2 (virtual)",
+)
+DILATOMETER_SEED = InstrumentSeed(
+    "dil-01",
+    "Vacuum dilatometer D-01",
+    "sim-dilatometer",
+    23,
+    asset_id="SIM-D01",
+    location="Bay 3 (virtual)",
+)
+DSC_SEED = InstrumentSeed(
+    "dsc-01",
+    "Differential scanning calorimeter C-01",
+    "sim-dsc",
+    31,
+    asset_id="SIM-C01",
+    location="Bay 3 (virtual)",
+)
+DEFAULT_FLEET_SEEDS = (FURNACE_SEED, UTM_SEED, DILATOMETER_SEED)
 AMBIENT_SEED = InstrumentSeed(
     "ambient-01",
     "Ambient logger A-01",
@@ -112,6 +137,8 @@ def ensure_instrument(
                 expected_cadence_s=ch.expected_cadence_s,
                 display_precision=ch.display_precision,
                 enum_labels=ch.enum_labels,
+                display_format=ch.display,
+                note=ch.note,
                 sort_order=i,
             )
         )
@@ -227,11 +254,14 @@ def bootstrap_dev(
     with_ambient: bool = False,
     rotate_token: bool = False,
     collector_id: str = "col-bay1-01",
+    with_dsc: bool = False,
 ) -> dict[str, str]:
     out.mkdir(parents=True, exist_ok=True)
     now = datetime.now(UTC)
     password = password or secrets.token_urlsafe(12)
-    seeds = [FURNACE_SEED] + ([AMBIENT_SEED] if with_ambient else [])
+    seeds = [*DEFAULT_FLEET_SEEDS]
+    seeds += [DSC_SEED] if with_dsc else []
+    seeds += [AMBIENT_SEED] if with_ambient else []
     token_path = out / "collector.token"
     with engine.begin() as conn:
         ensure_lab(conn, *DEMO_LAB)

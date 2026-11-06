@@ -99,6 +99,8 @@ def _channel_meta(ch: Any) -> dict[str, Any]:
         "role": ch.role,
         "display_precision": ch.display_precision,
         "enum_labels": ch.enum_labels,
+        "display_format": ch.display_format,
+        "note": ch.note,
         "expected_cadence_s": ch.expected_cadence_s,
         "gap_threshold_s": gap_threshold(ch.expected_cadence_s),
     }

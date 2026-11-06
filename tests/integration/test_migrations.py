@@ -29,6 +29,7 @@ EXPECTED_TABLES = {
     "lab_grant",
     "user_session",
     "audit_event",
+    "run",
 }
 
 
@@ -36,7 +37,7 @@ def test_upgrade_downgrade_upgrade(empty_db_url: str) -> None:
     engine = create_engine(empty_db_url)
     assert migrate.current_revision(engine) is None
     migrate.upgrade(empty_db_url)
-    assert migrate.current_revision(engine) == migrate.head_revision() == "0001"
+    assert migrate.current_revision(engine) == migrate.head_revision() == "0002"
     tables = set(inspect(engine).get_table_names())
     assert EXPECTED_TABLES <= tables
     with engine.connect() as c:
@@ -72,3 +73,35 @@ def test_identity_constraints_exist(db_url: str) -> None:
     assert ("collector_id", "batch_id") in uniques
     idx = {i["name"]: i["column_names"] for i in insp.get_indexes("sample")}
     assert idx["ix_sample_channel_time"][:2] == ["channel_id", "event_time"]
+
+
+def test_0002_is_expand_only_and_keeps_data_across_upgrade_and_rollback(
+    empty_db_url: str,
+) -> None:
+    """Release N-1 (schema 0001) data survives the upgrade; rolling back to the 0001 floor
+    keeps every scientific record."""
+    engine = create_engine(empty_db_url)
+    migrate.upgrade(empty_db_url, "0001")
+    with engine.begin() as c:
+        c.execute(text("INSERT INTO lab (id, name) VALUES ('lab-a', 'A')"))
+        c.execute(
+            text(
+                "INSERT INTO instrument (id, lab_id, name, simulated, profile_key) "
+                "VALUES ('i1', 'lab-a', 'I', true, 'sim-furnace')"
+            )
+        )
+        c.execute(
+            text(
+                "INSERT INTO channel (id, instrument_id, key, name, quantity, unit, data_type,"
+                " role, expected_cadence_s, display_precision) VALUES ('i1.pv', 'i1', 'pv', 'PV',"
+                " 'temperature', '°C', 'float', 'measurement', 1, 1)"
+            )
+        )
+    migrate.upgrade(empty_db_url)
+    with engine.connect() as c:
+        row = c.execute(text("SELECT display_format, note FROM channel")).one()
+    assert tuple(row) == ("fixed", None)
+    migrate.downgrade(empty_db_url, "0001")
+    with engine.connect() as c:
+        assert c.execute(text("SELECT count(*) FROM channel")).scalar_one() == 1
+    engine.dispose()

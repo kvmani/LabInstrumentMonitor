@@ -27,8 +27,10 @@ from labmon.server.models import (
     CollectorAssignment,
     Instrument,
     Lab,
+    ProfileRevision,
     Sample,
 )
+from labmon.server.runs import active_run
 
 FUTURE_SLACK = timedelta(seconds=5)
 
@@ -197,6 +199,8 @@ def instrument_status(
                 "display_precision": ch.display_precision,
                 "enum_labels": ch.enum_labels,
                 "expected_cadence_s": ch.expected_cadence_s,
+                "display_format": ch.display_format,
+                "note": ch.note,
                 "freshness_window_s": window,
                 "fresh": fresh,
                 "latest": _sample_view(latest, ch, now),
@@ -204,6 +208,12 @@ def instrument_status(
             }
         )
 
+    revision = conn.execute(
+        select(ProfileRevision.id, ProfileRevision.revision, ProfileRevision.definition)
+        .where(ProfileRevision.instrument_id == instrument_id)
+        .order_by(desc(ProfileRevision.revision))
+        .limit(1)
+    ).first()
     acquisition = _acquisition_state(conn, inst, assignment, coll, ch_views, now)
     process = _process_state(inst.profile_key, ch_views)
     return {
@@ -223,6 +233,34 @@ def instrument_status(
         "acquisition": acquisition,
         "process_state": process,
         "channels": ch_views,
+        "display": display_of(revision),
+        "active_run": active_run(conn, instrument_id, now),
+    }
+
+
+def latest_display(conn: Connection, instrument_id: str) -> dict[str, Any]:
+    revision = conn.execute(
+        select(ProfileRevision.id, ProfileRevision.revision, ProfileRevision.definition)
+        .where(ProfileRevision.instrument_id == instrument_id)
+        .order_by(desc(ProfileRevision.revision))
+        .limit(1)
+    ).first()
+    return display_of(revision)
+
+
+def display_of(revision: Any) -> dict[str, Any]:
+    """Presentation hints from the immutable profile revision (data only, no code)."""
+    d = (revision.definition if revision is not None else None) or {}
+    return {
+        "profile_revision_id": None if revision is None else revision.id,
+        "profile_revision": None if revision is None else revision.revision,
+        "title": d.get("title"),
+        "panels": d.get("panels") or [],
+        "analysis": d.get("analysis"),
+        "sign_convention": d.get("sign_convention"),
+        "cadence_note": d.get("cadence_note"),
+        "tolerance": d.get("tolerance_c"),
+        "state_channel": d.get("state_channel"),
     }
 
 

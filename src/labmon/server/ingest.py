@@ -58,6 +58,7 @@ from labmon.server.models import (
     ProfileRevision,
     Sample,
 )
+from labmon.server.runs import RUN_EVENTS, apply_run_events, validate_run_event
 
 EARLIEST_ACCEPTED = datetime(2000, 1, 1, tzinfo=UTC)
 RETRYABLE_SQLSTATES = {"40001", "40P01"}
@@ -298,6 +299,10 @@ def validate_against_registry(
             problem = _type_problem(ch.data_type, ch.enum_labels, e.value)
             if problem:
                 out.append(_rej(e, "type_mismatch", problem))
+        elif e.event_type in RUN_EVENTS:
+            problem = validate_run_event(e)
+            if problem:
+                out.append(_rej(e, "malformed_run_event", problem))
     return out
 
 
@@ -569,6 +574,7 @@ def _ingest_tx(
         conn.execute(insert(Sample), samples)
     if events:
         conn.execute(insert(AcquisitionEvent), events)
+        apply_run_events(conn, [e for e in fresh if e.event_type in RUN_EVENTS], now)
     conn.execute(
         update(BatchReceipt)
         .where(BatchReceipt.id == receipt_id)

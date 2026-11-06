@@ -67,9 +67,8 @@ class TensileSpecimen:
             return self.modulus_mpa * strain
         if strain <= self.uniform_strain:
             x = (strain - self.yield_strain) / (self.uniform_strain - self.yield_strain)
-            return self.yield_mpa + (self.uts_mpa - self.yield_mpa) * (
-                1.0 - (1.0 - x) ** self.hardening_exponent
-            )
+            hardening: float = (1.0 - x) ** self.hardening_exponent
+            return self.yield_mpa + (self.uts_mpa - self.yield_mpa) * (1.0 - hardening)
         x = (strain - self.uniform_strain) / (self.fracture_strain - self.uniform_strain)
         return self.uts_mpa - (self.uts_mpa - self.fracture_mpa) * x**2
 
