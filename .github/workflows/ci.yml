@@ -1,9 +1,8 @@
 name: ci
 
+# Manual trigger only (repository policy, see CONTRIBUTING.md): nothing runs on push or PR.
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
