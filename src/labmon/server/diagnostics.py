@@ -14,6 +14,7 @@ from typing import Any
 from sqlalchemy import Connection, text
 
 from labmon.contracts.envelope import format_utc
+from labmon.server.backup import backup_status
 from labmon.server.settings import Settings
 
 CLOCK_OFFSET_WARN_S = 5.0
@@ -210,14 +211,35 @@ def system_health(conn: Connection, settings: Settings, now: datetime) -> dict[s
                 "Open the failed export to see its error; retry with a smaller range.",
             )
         )
-    faults.append(
-        _f(
-            "info",
-            "backups_not_monitored",
-            "Backup freshness is not monitored yet.",
-            "Confirm the site backup schedule; backup monitoring is an M3 deliverable.",
+    backup = backup_status(settings.backup_status_file, now)
+    if backup is None:
+        faults.append(
+            _f(
+                "warning",
+                "backups_not_monitored",
+                "Backup freshness is not monitored (LABMON_BACKUP_STATUS_FILE is not set).",
+                "Schedule `labmon-server backup` and point LABMON_BACKUP_STATUS_FILE at "
+                "its status file.",
+            )
         )
-    )
+    elif not backup.get("ok"):
+        faults.append(
+            _f(
+                "critical",
+                "backup_failed",
+                "The last backup failed.",
+                "Read the backup log, fix the cause and run `labmon-server backup`.",
+            )
+        )
+    elif backup.get("age_hours", 0) > 26:
+        faults.append(
+            _f(
+                "warning",
+                "backup_stale",
+                f"The last good backup is {backup['age_hours']:.0f} h old.",
+                "Check the backup timer and run `labmon-server backup` now.",
+            )
+        )
     return {
         "server_time": format_utc(now),
         "rollup_queue": {
@@ -227,5 +249,6 @@ def system_health(conn: Connection, settings: Settings, now: datetime) -> dict[s
         "export_jobs": {k: int(v) for k, v in jobs.items()},
         "database_bytes": int(db_bytes),
         "export_disk": export_disk,
+        "backup": backup,
         "faults": faults,
     }

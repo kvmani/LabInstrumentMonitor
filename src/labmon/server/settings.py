@@ -34,6 +34,7 @@ class Settings:
     export_retention_days: float = 7.0
     export_max_attempts: int = 3
     export_lease_s: float = 300.0
+    backup_status_file: Path | None = None
     login_attempts_per_15min: int = 5
 
     @property
@@ -58,4 +59,7 @@ class Settings:
             session_ttl_hours=float(os.environ.get("LABMON_SESSION_TTL_HOURS", "12")),
             display_timezone=os.environ.get("LABMON_DISPLAY_TZ", "Asia/Kolkata"),
             export_dir=Path(os.environ.get("LABMON_EXPORT_DIR", "var/exports")),
+            backup_status_file=Path(os.environ["LABMON_BACKUP_STATUS_FILE"])
+            if os.environ.get("LABMON_BACKUP_STATUS_FILE")
+            else None,
         )

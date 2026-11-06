@@ -19,6 +19,18 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="labmon-server")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("migrate", help="upgrade the schema to the current head")
+    bk = sub.add_parser("backup", help="pg_dump with checksum, retention and status file")
+    bk.add_argument("--out-dir", type=Path, required=True)
+    bk.add_argument("--keep-days", type=float, default=14.0)
+    rc = sub.add_parser("restore-check", help="restore a dump into a scratch DB and compare")
+    rc.add_argument("dump", type=Path)
+    rc.add_argument(
+        "--scratch-admin-url",
+        required=True,
+        help="maintenance DB URL on a server where a scratch DB may be created",
+    )
+    doc = sub.add_parser("doctor", help="read-only preflight checks")
+    doc.add_argument("--json", action="store_true")
     serve = sub.add_parser("serve", help="run the API with uvicorn")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
@@ -87,6 +99,39 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "admin":
         return run_admin(args, settings)
+    if args.command == "backup":
+        import json as _json
+
+        from labmon.server.backup import BackupError, backup
+
+        status_file = settings.backup_status_file or args.out_dir / "backup-status.json"
+        try:
+            print(
+                _json.dumps(
+                    backup(settings.database_url, args.out_dir, args.keep_days, status_file),
+                    indent=2,
+                )
+            )
+        except BackupError as exc:
+            print(f"backup failed: {exc}", file=sys.stderr)
+            return 1
+        return 0
+    if args.command == "restore-check":
+        import json as _json
+
+        from labmon.server.backup import BackupError, restore_check
+
+        try:
+            result = restore_check(args.dump, args.scratch_admin_url)
+        except BackupError as exc:
+            print(f"restore check failed: {exc}", file=sys.stderr)
+            return 1
+        print(_json.dumps(result, indent=2))
+        return 0 if result["ok"] else 1
+    if args.command == "doctor":
+        from labmon.server import doctor
+
+        return doctor.main(settings, args.json)
 
     if args.command == "migrate":
         migrate.upgrade(settings.database_url)
