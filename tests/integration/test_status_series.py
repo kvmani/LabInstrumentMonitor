@@ -401,3 +401,25 @@ def test_health_endpoints(world: World, db_url: str, fake_now: FakeNow) -> None:
     assert ready.status_code == 200 and ready.json()["schema"] == "0005"
     assert c.get("/api/v1/nope").status_code == 404
     assert c.get("/health/live").headers["x-content-type-options"] == "nosniff"
+
+
+def test_faults_and_system_health(
+    client: TestClient, world: World, fake_now: FakeNow, t0: datetime
+) -> None:
+    send(client, world, frames(Seq(), t0, 1))
+    heartbeat(
+        client,
+        world.token,
+        t0,
+        spool_disk_free_bytes=100 * 2**20,
+        spool_disk_total_bytes=100 * 2**30,
+        spool_file_bytes=10_000,
+    )
+    s = status(client)
+    assert [f["code"] for f in s["faults"]] == ["spool_disk_low"]
+    fake_now.advance(40)
+    assert [f["code"] for f in status(client)["faults"]] == ["collector_offline"]
+    h = client.get("/api/v1/system/health").json()
+    assert h["rollup_queue"]["minutes"] == 3  # one minute per channel awaits the worker
+    assert h["database_bytes"] > 0
+    assert "backups_not_monitored" in [f["code"] for f in h["faults"]]

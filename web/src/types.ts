@@ -79,6 +79,23 @@ export interface InstrumentStatus {
   channels: ChannelStatus[];
   display: Display;
   active_run: RunView | null;
+  faults: Fault[];
+}
+
+export interface Fault {
+  severity: "critical" | "warning" | "info";
+  code: string;
+  message: string;
+  next_step: string;
+}
+
+export interface SystemHealth {
+  server_time: string;
+  rollup_queue: { minutes: number; oldest_marked_at: string | null };
+  export_jobs: Record<string, number>;
+  database_bytes: number;
+  export_disk: { free_bytes: number; total_bytes: number } | null;
+  faults: Fault[];
 }
 
 export interface PanelDef {

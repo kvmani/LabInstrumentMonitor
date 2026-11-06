@@ -17,6 +17,7 @@ from __future__ import annotations
 import gzip
 import logging
 import random
+import shutil
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -226,6 +227,19 @@ class Heartbeat:
             "sampling": self.sampling(),
             "upload_fault": (self.uploader.fault if self.uploader else None) or c.upload_fault,
             "sources": self.sources(),
+            **self._disk(),
+        }
+
+    def _disk(self) -> dict[str, int]:
+        try:
+            usage = shutil.disk_usage(self.outbox.path.parent)
+            size = self.outbox.path.stat().st_size
+        except OSError:
+            return {}
+        return {
+            "spool_disk_free_bytes": usage.free,
+            "spool_disk_total_bytes": usage.total,
+            "spool_file_bytes": size,
         }
 
     def send(self) -> bool:

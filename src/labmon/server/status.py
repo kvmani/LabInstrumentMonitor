@@ -20,6 +20,7 @@ from typing import Any
 from sqlalchemy import Connection, and_, desc, select
 
 from labmon.contracts.envelope import format_utc
+from labmon.server.diagnostics import instrument_faults
 from labmon.server.models import (
     AcquisitionEvent,
     Channel,
@@ -152,6 +153,9 @@ def collector_view(c: Any, now: datetime, cfg: StatusConfig) -> dict[str, Any]:
         "sampling": hb.get("sampling"),
         "software_version": hb.get("software_version"),
         "sources": hb.get("sources", []),
+        "quarantined": hb.get("quarantined"),
+        "spool_disk_free_bytes": hb.get("spool_disk_free_bytes"),
+        "spool_disk_total_bytes": hb.get("spool_disk_total_bytes"),
     }
 
 
@@ -230,7 +234,7 @@ def instrument_status(
     ).first()
     acquisition = _acquisition_state(conn, inst, assignment, coll, ch_views, now)
     process = _process_state(inst.profile_key, ch_views)
-    return {
+    out: dict[str, Any] = {
         "server_time": format_utc(now),
         "instrument": {
             "id": inst.id,
@@ -250,6 +254,8 @@ def instrument_status(
         "display": display_of(revision),
         "active_run": active_run(conn, instrument_id, now),
     }
+    out["faults"] = instrument_faults(out)
+    return out
 
 
 def latest_display(conn: Connection, instrument_id: str) -> dict[str, Any]:

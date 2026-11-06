@@ -2,7 +2,11 @@ import { useState } from "react";
 import { api, ApiError } from "../api";
 import type { SessionInfo } from "../types";
 
-export function Login({ onSignedIn }: { onSignedIn: (s: SessionInfo) => void }) {
+export function Login({
+  onSignedIn,
+}: {
+  onSignedIn: (s: SessionInfo) => void;
+}) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -13,9 +17,15 @@ export function Login({ onSignedIn }: { onSignedIn: (s: SessionInfo) => void }) 
     setBusy(true);
     setError(null);
     try {
-      onSignedIn(await api.post<SessionInfo>("/api/v1/session", { username, password }));
+      onSignedIn(
+        await api.post<SessionInfo>("/api/v1/session", { username, password }),
+      );
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Cannot reach the monitor service");
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Cannot reach the monitor service",
+      );
     } finally {
       setBusy(false);
     }
@@ -30,14 +40,27 @@ export function Login({ onSignedIn }: { onSignedIn: (s: SessionInfo) => void }) 
           </span>
           <h1 id="login-title">Lab Instrument Monitor</h1>
         </div>
-        <p className="muted">Read-only monitoring. Sign in with your lab account.</p>
+        <p className="muted">
+          Read-only monitoring. Sign in with your lab account.
+        </p>
         <label>
           Username
-          <input autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} required />
+          <input
+            autoComplete="username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            required
+          />
         </label>
         <label>
           Password
-          <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          <input
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
         </label>
         {error && (
           <p className="error" role="alert">

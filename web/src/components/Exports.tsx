@@ -14,14 +14,27 @@ const STATUS_TONE: Record<ExportJobView["status"], string> = {
 
 function size(bytes: number | null): string {
   if (bytes === null) return "";
-  return bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KiB` : `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
+  return bytes < 1024 * 1024
+    ? `${(bytes / 1024).toFixed(1)} KiB`
+    : `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
 }
 
 /** Durable exports: a ZIP with raw rows and a manifest, produced by the background worker. */
-export function ExportsPanel({ instrumentId, range, tz, tzLabel }: { instrumentId: string; range: { start: number; end: number } | null; tz: string; tzLabel: string }) {
+export function ExportsPanel({
+  instrumentId,
+  range,
+  tz,
+  tzLabel,
+}: {
+  instrumentId: string;
+  range: { start: number; end: number } | null;
+  tz: string;
+  tzLabel: string;
+}) {
   const [error, setError] = useState<string | null>(null);
   const jobs = usePolling<{ items: ExportJobView[] }>(
-    (signal) => api.get(`/api/v1/exports?${qs({ instrument_id: instrumentId })}`, signal),
+    (signal) =>
+      api.get(`/api/v1/exports?${qs({ instrument_id: instrumentId })}`, signal),
     3000,
     `exports:${instrumentId}`,
   );
@@ -29,7 +42,10 @@ export function ExportsPanel({ instrumentId, range, tz, tzLabel }: { instrumentI
     if (!range) return;
     setError(null);
     try {
-      await api.post(`/api/v1/instruments/${encodeURIComponent(instrumentId)}/exports`, { start: isoUtc(range.start), end: isoUtc(range.end) });
+      await api.post(
+        `/api/v1/instruments/${encodeURIComponent(instrumentId)}/exports`,
+        { start: isoUtc(range.start), end: isoUtc(range.end) },
+      );
       jobs.refresh();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "request failed");
@@ -37,12 +53,25 @@ export function ExportsPanel({ instrumentId, range, tz, tzLabel }: { instrumentI
   };
   const items = jobs.data?.items ?? [];
   return (
-    <section className="card card-pad" aria-labelledby="exp-title" data-testid="exports">
+    <section
+      className="card card-pad"
+      aria-labelledby="exp-title"
+      data-testid="exports"
+    >
       <div className="toolbar">
         <h2 id="exp-title">Exports</h2>
-        <span className="sub">ZIP with raw rows (CSV) and a manifest: range, time zone, profile revisions, snapshot cutoff, counts, checksums</span>
+        <span className="sub">
+          ZIP with raw rows (CSV) and a manifest: range, time zone, profile
+          revisions, snapshot cutoff, counts, checksums
+        </span>
         <span className="spacer" />
-        <button type="button" className="btn-primary" onClick={request} disabled={!range} data-testid="request-export">
+        <button
+          type="button"
+          className="btn-primary"
+          onClick={request}
+          disabled={!range}
+          data-testid="request-export"
+        >
           ⤓ Export displayed range
         </button>
       </div>
@@ -71,19 +100,30 @@ export function ExportsPanel({ instrumentId, range, tz, tzLabel }: { instrumentI
               {items.slice(0, 8).map((j) => (
                 <tr key={j.id}>
                   <td className="mono sub">
-                    {formatTime(j.params.start, tz)} – {formatTime(j.params.end, tz)}
+                    {formatTime(j.params.start, tz)} –{" "}
+                    {formatTime(j.params.end, tz)}
                   </td>
                   <td>
-                    <span className={`pill ${STATUS_TONE[j.status]}`}>{j.status}</span>
+                    <span className={`pill ${STATUS_TONE[j.status]}`}>
+                      {j.status}
+                    </span>
                     {j.error && <div className="sub error">{j.error}</div>}
                   </td>
-                  <td className="num">{(j.row_count ?? j.params.estimated_rows).toLocaleString()}</td>
+                  <td className="num">
+                    {(j.row_count ?? j.params.estimated_rows).toLocaleString()}
+                  </td>
                   <td className="mono sub" title={j.sha256 ?? ""}>
-                    {j.sha256 ? `${j.sha256.slice(0, 12)}…` : "—"} {size(j.byte_size)}
+                    {j.sha256 ? `${j.sha256.slice(0, 12)}…` : "—"}{" "}
+                    {size(j.byte_size)}
                   </td>
                   <td>
                     {j.status === "succeeded" && (
-                      <a className="btn" href={`/api/v1/exports/${j.id}/download`} download data-testid="export-download">
+                      <a
+                        className="btn"
+                        href={`/api/v1/exports/${j.id}/download`}
+                        download
+                        data-testid="export-download"
+                      >
                         Download
                       </a>
                     )}

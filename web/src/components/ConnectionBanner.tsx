@@ -16,8 +16,13 @@ export function ConnectionBanner(props: {
     : "no data loaded yet";
   return (
     <div className="banner" role="alert" data-testid="connection-banner">
-      <strong>{online ? "Cannot reach the monitor service" : "This browser is offline"}</strong> ·{" "}
-      {shown}. Acquisition continues on the collector; values below may be out of date.
+      <strong>
+        {online
+          ? "Cannot reach the monitor service"
+          : "This browser is offline"}
+      </strong>{" "}
+      · {shown}. Acquisition continues on the collector; values below may be out
+      of date.
     </div>
   );
 }

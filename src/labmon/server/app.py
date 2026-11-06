@@ -33,6 +33,7 @@ from labmon.contracts.envelope import (
 from labmon.server import analysis, migrate
 from labmon.server.analysis import load_frames
 from labmon.server.db import make_engine
+from labmon.server.diagnostics import system_health
 from labmon.server.exports import (
     ExportError,
     ExportRequest,
@@ -117,6 +118,10 @@ class HeartbeatBody(BaseModel):
     sampling: bool
     upload_fault: str | None = Field(default=None, max_length=200)
     sources: list[dict[str, str]] = Field(default_factory=list, max_length=64)
+    # optional since 0.1: collector disk headroom (older collectors omit them)
+    spool_disk_free_bytes: int | None = Field(default=None, ge=0)
+    spool_disk_total_bytes: int | None = Field(default=None, ge=0)
+    spool_file_bytes: int | None = Field(default=None, ge=0)
 
 
 def create_app(
@@ -381,6 +386,11 @@ def create_app(
                 raise HTTPException(404, "channel not found")
             scoped_instrument(conn, p, ch.instrument_id)
             return channel_series(conn, channel_id, s, e, now(), series_limits, max_points)
+
+    @app.get("/api/v1/system/health")
+    def get_system_health(p: User) -> dict[str, Any]:
+        with engine.connect() as conn:
+            return system_health(conn, settings, now())
 
     @app.get("/api/v1/instruments/{instrument_id}/runs")
     def get_runs(
