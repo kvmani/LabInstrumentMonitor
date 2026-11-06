@@ -151,6 +151,7 @@ def main(argv: list[str] | None = None) -> int:
             p.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    logging.getLogger("httpx").setLevel(logging.WARNING)  # one line per request is noise
     cfg = load_config(args.config)
     if args.command == "run":
         return cmd_run(cfg)

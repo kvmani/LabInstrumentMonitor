@@ -53,3 +53,15 @@ Evidence labels: **simulated** (synthetic sources on a dev machine/CI), **staged
   entity selects return flat rows (status/CSV).
 - Added ADRs 0001–0003, `docs/threat-model.md`, `docs/dependencies.md`.
 - **Next:** T4 UI (React/Vite/ECharts), process-level recovery test, Playwright happy path.
+
+### 2026-11-06 — commit 3 (T4 UI first cut)
+- `web/`: React 19.2.9 + TypeScript 5.9.3 + Vite 7.3.7 + ECharts 6.1.0, pinned in
+  `package-lock.json`. Fleet page (search, status filters/counts, simulator badge, freshness,
+  reason text), instrument workspace (sticky status header, channel tiles with last-good, live
+  follow vs labelled pause, presets 15 min–30 d + custom, keyboard zoom/pan, auto/fixed Y with
+  minimum span, gap overlays, bad-quality markers, event markers, bucket min–max band + mean,
+  summary text, readings table, CSV link, PNG export), IST/UTC toggle, connection banner.
+- Manual run (simulated): `labmon-devdb start`, `migrate`, `bootstrap-dev`, `serve`, collector →
+  status Receiving, 1 Hz ACKs, Chromium at 1366×768 made **no requests outside 127.0.0.1:8000**.
+- **Next:** process-level recovery e2e (kill API / lost ACK), Playwright browser e2e, screenshots
+  at supported sizes, docs/operations/local-dev.md.
