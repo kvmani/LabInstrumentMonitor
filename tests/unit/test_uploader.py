@@ -171,3 +171,24 @@ def test_backoff_is_bounded_with_jitter(failures: int) -> None:
     assert all(0 < d <= 60.0 for d in delays)
     ceiling = min(60.0, 2 ** (failures - 1))
     assert ceiling / 2 <= delays[-1] <= ceiling
+
+
+def test_run_loop_survives_unexpected_errors(tmp_path: Path) -> None:
+    import threading
+
+    up, ob, _ = make(tmp_path, [])
+    stop = threading.Event()
+    calls = {"n": 0}
+    real = ob.next_batch
+
+    def flaky():  # type: ignore[no-untyped-def]
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise OSError("disk I/O error")
+        if calls["n"] >= 3:
+            stop.set()
+        return real()
+
+    ob.next_batch = flaky  # type: ignore[method-assign]
+    up.run(stop, retention_s=3600)
+    assert calls["n"] >= 3  # kept going after the failure

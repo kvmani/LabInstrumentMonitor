@@ -1,0 +1,43 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ci-only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s
+          --health-retries 10
+    env:
+      LABMON_TEST_PG_ADMIN_URL: postgresql+psycopg://postgres:ci-only@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: uv sync --frozen --extra dev
+      - run: .venv/bin/ruff check src tests && .venv/bin/ruff format --check src tests
+      - run: .venv/bin/mypy
+      - run: .venv/bin/pytest tests/unit tests/integration
+      - run: cd web && npm ci && npm run typecheck && npm run build
+      - run: .venv/bin/playwright install --with-deps chromium
+      - run: .venv/bin/pytest tests/e2e

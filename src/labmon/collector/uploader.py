@@ -20,6 +20,7 @@ import random
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import timedelta
 from enum import StrEnum
 from typing import Any
 
@@ -183,12 +184,14 @@ class Uploader:
     def run(self, stop: threading.Event, retention_s: float) -> None:
         last_prune = self.clock.monotonic()
         while not stop.is_set():
-            _, wait = self.step()
-            if self.clock.monotonic() - last_prune > 3600:
-                from datetime import timedelta
-
-                self.outbox.prune_acked(timedelta(seconds=retention_s))
-                last_prune = self.clock.monotonic()
+            try:
+                _, wait = self.step()
+                if self.clock.monotonic() - last_prune > 3600:
+                    self.outbox.prune_acked(timedelta(seconds=retention_s))
+                    last_prune = self.clock.monotonic()
+            except Exception:  # noqa: BLE001 - keep the uploader alive; data stays in the outbox
+                log.exception("uploader step failed; retrying")
+                wait = self.backoff.next_delay()
             if wait > 0 and self.clock.sleep(wait, stop):
                 break
 
@@ -244,6 +247,9 @@ class Heartbeat:
 
     def run(self, stop: threading.Event, every_s: float) -> None:
         while not stop.is_set():
-            self.send()
+            try:
+                self.send()
+            except Exception:  # noqa: BLE001 - a heartbeat failure must not end the process
+                log.exception("heartbeat failed")
             if self.clock.sleep(every_s, stop):
                 break

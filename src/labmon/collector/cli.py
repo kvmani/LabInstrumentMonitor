@@ -96,9 +96,16 @@ def cmd_run(cfg: CollectorConfig) -> int:
     )
     for t in threads:
         t.start()
+    exit_code = 0
     try:
         while not stop.is_set():
             stop.wait(1.0)
+            if not threads[0].is_alive() and not stop.is_set():
+                # acquisition died (e.g. spool I/O error): exit non-zero so the service manager
+                # restarts the collector; persisted records are recovered from the outbox
+                log.critical("acquisition thread stopped unexpectedly; exiting")
+                exit_code = 1
+                break
     finally:
         stop.set()
         threads[0].join(timeout=10)
@@ -107,7 +114,7 @@ def cmd_run(cfg: CollectorConfig) -> int:
         up_client.close()
         hb_client.close()
         outbox.close()
-    return 0
+    return exit_code
 
 
 def cmd_status(cfg: CollectorConfig, as_json: bool) -> int:
