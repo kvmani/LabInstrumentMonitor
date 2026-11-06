@@ -142,27 +142,51 @@ Defects found and fixed during this checkpoint:
 status words and their meaning taken from the same labels the UI shows, charts and gaps, runs
 and analyses, exports, roles. Browser test opens it from the top bar.
 
-### Validation (latest, step 10)
+**Step 11 — soak tooling (done):** `labmon-soak` (`src/labmon/devtools/soak.py`) runs the API,
+worker and collector as real processes against a dedicated database and can kill the API on a
+schedule. It samples RSS, descriptors, outbox backlog, ingest latency, staleness, database size
+and dirty minutes. The verdict covers leaks, steady-state p95, per-fault recovery time, outbox
+drain (new `labmon-collector flush`) and ledger completeness (no sequence holes or conflicts).
+Observation: interval latency is bounded at about 1 s, which is the upload flush period. After
+an API kill, catch-up takes up to the collector's backoff cap (60 s by default).
+
+**Step 12 — recovery and packaging (done):** PITR runbook `docs/operations/pitr.md`, rehearsed
+by `tests/e2e/test_pitr.py` on disposable clusters (WAL archive, base backup, delete after the
+target, recovery into a separate cluster, rows and schema head verified). Windows 11 collector:
+ADR 0007, `deploy/windows/` (WinSW XML, offline PowerShell installer) and `wheelhouse-win/` in
+the bundle (27 Windows wheels, 11 MB). Windows parts have only static checks and have **not run on
+Windows**. Defect fixed: releases did not keep `deploy/`, so the documented rollback command
+pointed at a missing file. Rehearsed offline in a temporary root. Runbook correction:
+acknowledged records are not re-sent after a restore (no command exists yet), so the interval
+between the recovery target and the stop stays a gap.
+
+### Validation (latest, step 12)
 
 | Command | Result |
 | --- | --- |
-| `scripts/check.sh --e2e` | ruff + mypy --strict clean, **182 passed** (unit + integration, 70 s), Prettier/typecheck/build clean, e2e **2 passed** (43 s) |
+| `scripts/check.sh` | ruff + mypy --strict clean, **190 passed** (unit + integration, 61 s), Prettier/typecheck/build clean |
+| `scripts/check.sh --e2e` | e2e **4 passed** (recovery, browser incl. help, 45 s soak with 2 API kills, PITR) |
+
+Note: running the full gate in parallel with a soak exhausted the container's memory (restart).
+Run soaks on their own.
 
 ### Current limits
 
-- Nothing is staged or field-verified; the release rehearsal ran in a temporary root without
-  real systemd, reboot or client-workstation TLS.
+- Nothing is staged or field-verified. The release rehearsal ran in a temporary root without
+  real systemd, reboot or client-workstation TLS. The Windows installer has never run on Windows.
+- The longest soak recorded is 20 min (see below), not 72 h.
+- There is no command to re-send acknowledged records after a database restore.
 - DSC peak areas use a straight baseline and are labelled estimates.
 - The CI workflow has never been dispatched on GitHub; only local gate runs are recorded.
 - No scientist usability review yet.
 
 ### Next actions (M3)
 
-1. Staging VM rehearsal of `deploy/install.sh` with real systemd, reboot and TLS from a
-   client workstation (needs an authorized environment).
-2. Windows collector service approach and runbook; PITR runbook for PostgreSQL.
-3. Soak tooling (72 h simulated fleet) with spool, latency and memory evidence.
-4. Scientist usability review of the dashboards, fix findings and repeat.
+1. Staging VM rehearsals (needs an authorized environment): Ubuntu install with real systemd,
+   reboot and TLS from a client; Windows 11 collector install, reboot without logon, rollback.
+2. 72 h soak on a representative host: `labmon-soak --hours 72 --restart-api-every 240`.
+3. Operator-initiated replay of acknowledged records after a restore (design + ADR first).
+4. Profile wizard / collector provisioning UI; scientist usability review.
 
 ## Checkpoint 1 — First implementation tranche
 
