@@ -116,6 +116,25 @@ export interface RunView {
   end_reason: string | null;
   active: boolean;
   metadata: Record<string, unknown>;
+  notes: string | null;
+  tags: string[];
+  created_by: string | null;
+  updated_at: string | null;
+}
+
+export interface AnnotationView {
+  id: number;
+  instrument_id: string;
+  run_id: string | null;
+  at: string;
+  end_at: string | null;
+  text: string;
+  author: string | null;
+  revision: number;
+  created_at: string;
+  updated_at: string | null;
+  retracted: boolean;
+  retract_reason: string | null;
 }
 
 export interface XYAnalysis {

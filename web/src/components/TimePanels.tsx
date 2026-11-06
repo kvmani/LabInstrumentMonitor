@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { echarts } from "../charts";
 import { axisLabel, formatNumber, humanize } from "../format";
 import { formatDuration, formatTime } from "../time";
-import type { ChannelStatus, PanelDef, Series } from "../types";
+import type { AnnotationView, ChannelStatus, PanelDef, Series } from "../types";
 
 export interface PanelScale {
   mode: "auto" | "log" | "fixed";
@@ -75,8 +75,9 @@ export function TimePanels(props: {
   theme: string;
   onZoom?: (start: number, end: number) => void;
   height?: number;
+  annotations?: AnnotationView[];
 }) {
-  const { title, panels, channels, series, start, end, tz, tzLabel, scales, tolerance, theme, onZoom } = props;
+  const { title, panels, channels, series, start, end, tz, tzLabel, scales, tolerance, theme, onZoom, annotations } = props;
   const el = useRef<HTMLDivElement>(null);
   const chart = useRef<echarts.ECharts | null>(null);
   const zoomRef = useRef(onZoom);
@@ -246,6 +247,18 @@ export function TimePanels(props: {
               name: e.type === "run_started" ? `▶ ${String(e.detail?.name ?? "run")}` : e.type === "run_ended" ? "■ run end" : humanize(e.type),
             }))
           : [];
+        const accent = cssVar("--accent");
+        const short = (t: string) => (t.length > 28 ? `${t.slice(0, 27)}…` : t);
+        const notes = i === 0 && j === 0 ? (annotations ?? []) : [];
+        const noteLines = notes.filter((a) => !a.end_at).map((a) => ({
+          xAxis: Date.parse(a.at), name: `✎ ${short(a.text)}`,
+          lineStyle: { color: accent, type: "solid", width: 1.2 },
+          label: { show: notes.length <= 8, formatter: "{b}", color: accent, fontSize: 10, position: "insideEndTop" },
+        }));
+        const noteAreas = notes.filter((a) => a.end_at).map((a) => [
+          { xAxis: Date.parse(a.at), name: `✎ ${short(a.text)}`, itemStyle: { color: "rgba(33, 85, 196, 0.10)" }, label: { color: accent } },
+          { xAxis: Date.parse(a.end_at!) },
+        ]);
         const name = s.mode === "bucket" ? `${ch.name} (mean)` : ch.name;
         legend.push(name);
         out.push({
@@ -255,13 +268,17 @@ export function TimePanels(props: {
           markArea: j === 0 ? {
             silent: true, itemStyle: { color: gapFill },
             label: { color: muted, fontSize: 10, position: "insideTop" },
-            data: s.gaps.map((g) => [{ xAxis: Date.parse(g.start), name: g.open ? "no data yet" : `no data · ${formatDuration(g.duration_s)}` }, { xAxis: Date.parse(g.end) }]),
+            data: [
+              ...s.gaps.map((g) => [{ xAxis: Date.parse(g.start), name: g.open ? "no data yet" : `no data · ${formatDuration(g.duration_s)}` }, { xAxis: Date.parse(g.end) }]),
+              ...noteAreas,
+            ],
           } : undefined,
           markLine: j === 0 ? {
             silent: true, symbol: "none",
             data: [
               ...bads.map((d) => ({ ...d, lineStyle: { color: bad, type: "dashed", width: 1 }, label: { show: bads.length < 10, formatter: "{b}", color: bad, fontSize: 10 } })),
               ...events.map((d) => ({ ...d, lineStyle: { color: muted, type: "dotted", width: 1 }, label: { show: events.length <= 4, formatter: "{b}", color: muted, fontSize: 10, position: "insideEndTop" } })),
+              ...noteLines,
             ],
           } : undefined,
         });
@@ -303,7 +320,7 @@ export function TimePanels(props: {
       { notMerge: true },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [series, panels, channels, start, end, tz, tzLabel, scales, tolerance, theme, title, height]);
+  }, [series, panels, channels, start, end, tz, tzLabel, scales, tolerance, theme, title, height, annotations]);
 
   return <div ref={el} className="chart" style={{ height }} role="img" aria-label={`${title} chart`} data-testid="history-chart" />;
 }

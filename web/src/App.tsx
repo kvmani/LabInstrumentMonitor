@@ -101,8 +101,7 @@ export function App() {
           </button>
         </div>
         <button type="button" onClick={() => setThemePref(nextTheme[themePref])} aria-label={`Theme: ${themePref}. Switch to ${nextTheme[themePref]}`} title={`Theme: ${themePref}`}>
-          <span aria-hidden="true">{themePref === "dark" ? "☾" : themePref === "light" ? "☀" : "◑"}</span>
-          {themePref === "system" ? "Auto" : themePref === "light" ? "Light" : "Dark"}
+          Theme: {themePref === "system" ? "Auto" : themePref === "light" ? "Light" : "Dark"}
         </button>
         <span className="user">{session.display_name}</span>
         <button type="button" onClick={signOut}>
@@ -111,7 +110,7 @@ export function App() {
       </nav>
       <div id="content">
         {m ? (
-          <InstrumentPage key={m[1]} id={decodeURIComponent(m[1]!)} tz={tz} tzLabel={tzLabel} online={online} theme={theme} />
+          <InstrumentPage key={m[1]} id={decodeURIComponent(m[1]!)} tz={tz} tzLabel={tzLabel} online={online} theme={theme} labs={session.labs} />
         ) : (
           <Dashboard tz={tz} tzLabel={tzLabel} online={online} />
         )}

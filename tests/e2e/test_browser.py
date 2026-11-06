@@ -157,8 +157,36 @@ def test_dashboard_workspace_csv_and_failure_states(running: Stack, tmp_path: Pa
             10,
             "events listed",
         )
+        # RUN-01 through the UI: a user run record and an annotation
         page.get_by_test_id("tab-runs").click()
-        page.wait_for_timeout(500)
+        page.get_by_test_id("new-run").click()
+        form = page.get_by_test_id("new-run-form")
+        form.get_by_label("Name").fill("Rehearsal anneal")
+        form.get_by_label("Tags (comma separated)").fill("rehearsal")
+        form.get_by_role("button", name="Create run").click()
+        detail = page.get_by_test_id("run-detail")
+        wait_for(lambda: "Rehearsal anneal" in detail.inner_text(), 10, "new run selected")
+        assert (
+            "Recorded by scientist" in detail.inner_text() and "#rehearsal" in detail.inner_text()
+        )
+        page.get_by_role("button", name="■ End run now").click()
+        wait_for(lambda: "Complete" in detail.inner_text(), 10, "run ended")
+        shot(page, "furnace-user-run-1366x768")
+
+        page.get_by_test_id("tab-overview").click()
+        notes = page.get_by_test_id("annotations")
+        notes.get_by_role("button", name="✎ Add annotation").click()
+        notes.get_by_label("Annotation text").fill("door opened for inspection")
+        notes.get_by_role("button", name="Save").click()
+        wait_for(
+            lambda: "door opened for inspection" in notes.inner_text(), 10, "annotation listed"
+        )
+        notes.get_by_role("button", name="Correct").click()
+        notes.get_by_label("Corrected text").fill("door opened for TC inspection")
+        notes.get_by_label("Reason (recorded in the audit log)").fill("clarify the probe")
+        notes.get_by_role("button", name="Save correction").click()
+        wait_for(lambda: "corrected (rev 2)" in notes.inner_text(), 10, "annotation corrected")
+        shot(page, "furnace-annotations-1366x768")
 
         # dilatometer: log-scale pressure panel and signed length change tile
         page.goto(stack.base + "/#/instrument/dil-01")

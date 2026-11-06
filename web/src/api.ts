@@ -20,6 +20,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     try {
       const body = (await res.json()) as { detail?: unknown };
       if (typeof body.detail === "string") detail = body.detail;
+      else if (Array.isArray(body.detail) && body.detail.length) {
+        // FastAPI validation errors: show the first message with its field
+        const first = body.detail[0] as { loc?: unknown[]; msg?: string };
+        detail = `${(first.loc ?? []).slice(1).join(".")}: ${first.msg ?? "invalid"}`;
+      }
     } catch {
       /* not JSON */
     }
@@ -32,6 +37,8 @@ export const api = {
   get: <T>(path: string, signal?: AbortSignal) => request<T>(path, { signal }),
   post: <T>(path: string, body: unknown) =>
     request<T>(path, { method: "POST", body: JSON.stringify(body) }),
+  patch: <T>(path: string, body: unknown) =>
+    request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
   del: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 };
 

@@ -4,10 +4,11 @@ import { formatNumber, formatValue, humanize } from "../format";
 import { useNow, usePolling } from "../hooks";
 import { acquisitionReason } from "../status";
 import { formatAge, formatDuration, formatTime, fromLocalInput, isoUtc, toLocalInput } from "../time";
-import type { AcqEvent, ChannelStatus, InstrumentStatus, PanelDef, RunDetail, RunView, Series } from "../types";
+import type { AcqEvent, AnnotationView, ChannelStatus, InstrumentStatus, PanelDef, RunDetail, RunView, Series } from "../types";
 import { AcqBadge, CollectorBadge, RunBadge, SimBadge } from "./Badges";
 import { ConnectionBanner } from "./ConnectionBanner";
 import { type PanelScale, TimePanels } from "./TimePanels";
+import { AnnotationPanel, NewRunForm, RECORD_ROLES, RunEditForm } from "./Records";
 import { XYChart } from "./XYChart";
 
 const PRESETS = [
@@ -23,6 +24,7 @@ type Tab = "overview" | "runs" | "diagnostics";
 const NO_SCALES: Record<string, PanelScale> = {};
 
 interface Common {
+  canRecord?: boolean;
   tz: string;
   tzLabel: string;
   theme: string;
@@ -215,7 +217,7 @@ function ReadingsTable({ s, ch, tz, tzLabel }: { s: Series; ch: ChannelStatus; t
 
 // --- Overview -------------------------------------------------------------------------------
 
-function Overview({ s, drift, tz, tzLabel, theme }: Common & { s: InstrumentStatus; drift: number }) {
+function Overview({ s, drift, tz, tzLabel, theme, canRecord }: Common & { s: InstrumentStatus; drift: number }) {
   const [view, setView] = useState<View>({ kind: "live", preset: "1h" });
   const [custom, setCustom] = useState<{ start: string; end: string } | null>(null);
   const [rangeError, setRangeError] = useState<string | null>(null);
@@ -234,6 +236,16 @@ function Overview({ s, drift, tz, tzLabel, theme }: Common & { s: InstrumentStat
     view.kind === "live" ? liveInterval(span) : 15000,
   );
   const range = history.data ? { start: history.data.start, end: history.data.end } : null;
+  const notes = usePolling<{ items: AnnotationView[] }>(
+    (signal) => {
+      const end = view.kind === "live" ? Date.now() + 1000 : view.end;
+      const start = view.kind === "live" ? end - span : view.start;
+      return api.get(`/api/v1/instruments/${encodeURIComponent(s.instrument.id)}/annotations?${qs({ start: isoUtc(start), end: isoUtc(end) })}`, signal);
+    },
+    view.kind === "live" ? Math.max(liveInterval(span), 5000) : 30000,
+    `ann:${s.instrument.id}|${viewKey}`,
+  );
+  const annotations = notes.data?.items;
   const pause = (start: number, end: number, reason: string) => {
     setView({ kind: "fixed", start, end, reason });
     setCustom(null);
@@ -358,6 +370,7 @@ function Overview({ s, drift, tz, tzLabel, theme }: Common & { s: InstrumentStat
               tolerance={s.display.tolerance}
               theme={theme}
               onZoom={(a, b) => pause(a, b, "zoomed")}
+              annotations={annotations}
             />
             {primary && primarySeries && (
               <>
@@ -368,6 +381,8 @@ function Overview({ s, drift, tz, tzLabel, theme }: Common & { s: InstrumentStat
           </>
         )}
       </section>
+      <div style={{ height: 14 }} />
+      <AnnotationPanel instrumentId={s.instrument.id} items={annotations ?? []} canRecord={!!canRecord} tz={tz} tzLabel={tzLabel} onChanged={notes.refresh} />
     </>
   );
 }
@@ -388,9 +403,20 @@ function num(v: unknown, digits: number, unit = ""): string {
   return typeof v === "number" ? `${v.toFixed(digits)}${unit ? ` ${unit}` : ""}` : "—";
 }
 
-function RunAnalysisView({ detail, s, tz, tzLabel, theme }: Common & { detail: RunDetail; s: InstrumentStatus }) {
+function RunAnalysisView({ detail, s, tz, tzLabel, theme, canRecord, onChanged }: Common & { detail: RunDetail; s: InstrumentStatus; onChanged: () => void }) {
   const a = detail.analysis;
   const run = detail.run;
+  const [editing, setEditing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const endNow = async () => {
+    setError(null);
+    try {
+      await api.patch(`/api/v1/runs/${encodeURIComponent(run.id)}`, { ended_at: isoUtc(Date.now()), reason: "ended from the run view" });
+      onChanged();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "request failed");
+    }
+  };
   const markers = useMemo(() => {
     if (!a) return [];
     const sm = a.summary as Record<string, unknown>;
@@ -423,6 +449,46 @@ function RunAnalysisView({ detail, s, tz, tzLabel, theme }: Common & { detail: R
           {formatTime(run.started_at, tz)} – {run.ended_at ? formatTime(run.ended_at, tz) : "running"} {tzLabel} · {formatDuration((end - start) / 1000)}
         </span>
       </div>
+      <div className="row" style={{ marginBottom: 10 }}>
+        <span className="sub">
+          {run.source === "user" ? `Recorded by ${run.created_by ?? "unknown"}` : "Reported by the instrument program"}
+          {run.updated_at ? ` · corrected ${formatTime(run.updated_at, tz)}` : ""}
+        </span>
+        {run.tags.map((t) => (
+          <span key={t} className="pill tone-muted">
+            #{t}
+          </span>
+        ))}
+        <span className="spacer" />
+        {canRecord && run.source === "user" && run.active && (
+          <button type="button" onClick={endNow}>
+            ■ End run now
+          </button>
+        )}
+        {canRecord && (
+          <button type="button" onClick={() => setEditing(!editing)} aria-expanded={editing} data-testid="edit-run">
+            ✎ Correct record
+          </button>
+        )}
+      </div>
+      {run.notes && <p className="notes">{run.notes}</p>}
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+      {editing && (
+        <RunEditForm
+          run={run}
+          tz={tz}
+          tzLabel={tzLabel}
+          onSaved={() => {
+            setEditing(false);
+            onChanged();
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      )}
       {a?.kind === "tensile" && (
         <>
           <div className="metrics">
@@ -482,7 +548,8 @@ function RunAnalysisView({ detail, s, tz, tzLabel, theme }: Common & { detail: R
   );
 }
 
-function Runs({ s, tz, tzLabel, theme }: Common & { s: InstrumentStatus }) {
+function Runs({ s, tz, tzLabel, theme, canRecord }: Common & { s: InstrumentStatus }) {
+  const [creating, setCreating] = useState(false);
   const runs = usePolling((signal) => api.get<{ items: RunView[] }>(`/api/v1/instruments/${encodeURIComponent(s.instrument.id)}/runs?limit=50`, signal), 10000, `runs:${s.instrument.id}`);
   const items = runs.data?.items ?? [];
   const [selected, setSelected] = useState<string | null>(null);
@@ -493,8 +560,42 @@ function Runs({ s, tz, tzLabel, theme }: Common & { s: InstrumentStatus }) {
     `run:${current}`,
   );
   if (runs.loading && !runs.data) return <p className="muted">Loading runs…</p>;
-  if (items.length === 0) return <p className="empty">No runs recorded yet for this instrument.</p>;
+  const toolbar = (
+    <div className="toolbar">
+      <span className="sub">{items.length} runs · instrument-reported and user records</span>
+      <span className="spacer" />
+      {canRecord && (
+        <button type="button" className="btn-primary" onClick={() => setCreating(!creating)} aria-expanded={creating} data-testid="new-run">
+          ＋ New run record
+        </button>
+      )}
+    </div>
+  );
+  const form = creating && (
+    <NewRunForm
+      instrumentId={s.instrument.id}
+      tz={tz}
+      tzLabel={tzLabel}
+      onCancel={() => setCreating(false)}
+      onCreated={(r) => {
+        setCreating(false);
+        setSelected(r.id);
+        runs.refresh();
+      }}
+    />
+  );
+  if (items.length === 0)
+    return (
+      <>
+        {toolbar}
+        {form}
+        <p className="empty">No runs recorded yet for this instrument.</p>
+      </>
+    );
   return (
+    <>
+    {toolbar}
+    {form}
     <div className="split">
       <div className="card table-wrap">
         <table data-testid="runs-table">
@@ -525,9 +626,25 @@ function Runs({ s, tz, tzLabel, theme }: Common & { s: InstrumentStatus }) {
       </div>
       <div>
         {detail.error && <p className="error">Could not load the run: {detail.error.message}</p>}
-        {detail.data ? <RunAnalysisView detail={detail.data} s={s} tz={tz} tzLabel={tzLabel} theme={theme} /> : <p className="muted">Loading run…</p>}
+        {detail.data ? (
+          <RunAnalysisView
+            detail={detail.data}
+            s={s}
+            tz={tz}
+            tzLabel={tzLabel}
+            theme={theme}
+            canRecord={canRecord}
+            onChanged={() => {
+              detail.refresh();
+              runs.refresh();
+            }}
+          />
+        ) : (
+          <p className="muted">Loading run…</p>
+        )}
       </div>
     </div>
+    </>
   );
 }
 
@@ -613,7 +730,7 @@ function Diagnostics({ s, drift, tz, tzLabel }: Common & { s: InstrumentStatus; 
 
 // --- page -----------------------------------------------------------------------------------
 
-export function InstrumentPage({ id, tz, tzLabel, online, theme }: Common & { id: string; online: boolean }) {
+export function InstrumentPage({ id, tz, tzLabel, online, theme, labs }: Common & { id: string; online: boolean; labs: Record<string, string> }) {
   const now = useNow(1000);
   const [tab, setTab] = useState<Tab>("overview");
   const status = usePolling((signal) => api.get<InstrumentStatus>(`/api/v1/instruments/${encodeURIComponent(id)}/status`, signal), 2000, `status:${id}`);
@@ -690,8 +807,8 @@ export function InstrumentPage({ id, tz, tzLabel, online, theme }: Common & { id
               </button>
             ))}
           </div>
-          {tab === "overview" && <Overview s={s} drift={drift} tz={tz} tzLabel={tzLabel} theme={theme} />}
-          {tab === "runs" && <Runs s={s} tz={tz} tzLabel={tzLabel} theme={theme} />}
+          {tab === "overview" && <Overview s={s} drift={drift} tz={tz} tzLabel={tzLabel} theme={theme} canRecord={RECORD_ROLES.has(labs[s.instrument.lab_id] ?? "")} />}
+          {tab === "runs" && <Runs s={s} tz={tz} tzLabel={tzLabel} theme={theme} canRecord={RECORD_ROLES.has(labs[s.instrument.lab_id] ?? "")} />}
           {tab === "diagnostics" && <Diagnostics s={s} drift={drift} tz={tz} tzLabel={tzLabel} theme={theme} />}
         </>
       )}
