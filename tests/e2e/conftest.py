@@ -41,6 +41,7 @@ class Stack:
     logs: Path
     server: subprocess.Popen[bytes] | None = None
     collector: subprocess.Popen[bytes] | None = None
+    worker: subprocess.Popen[bytes] | None = None
     handles: list[object] = field(default_factory=list)
 
     @property
@@ -54,6 +55,7 @@ class Stack:
     def _env(self) -> dict[str, str]:
         env = {k: v for k, v in os.environ.items() if not k.startswith("LABMON_")}
         env.update(
+            LABMON_EXPORT_DIR=str(self.workdir.parent / "exports"),
             LABMON_DATABASE_URL=self.db_url,
             LABMON_ENV="test",
             LABMON_STATIC_DIR=str(ROOT / "web" / "dist"),
@@ -88,6 +90,14 @@ class Stack:
         self.server.wait(10)
         self.server = None
 
+    def start_worker(self) -> None:
+        self.worker = subprocess.Popen(
+            [str(BIN / "labmon-server"), "worker", "--interval", "0.5"],
+            env=self._env(),
+            stdout=self._log("worker"),
+            stderr=subprocess.STDOUT,
+        )
+
     def start_collector(self) -> None:
         self.collector = subprocess.Popen(
             [str(BIN / "labmon-collector"), "run", "--config", str(self.config)],
@@ -113,7 +123,7 @@ class Stack:
         return json.loads(out.stdout)  # type: ignore[no-any-return]
 
     def close(self) -> None:
-        for proc in (self.collector, self.server):
+        for proc in (self.collector, self.worker, self.server):
             if proc is not None and proc.poll() is None:
                 proc.kill()
                 proc.wait(10)

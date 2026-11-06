@@ -10,6 +10,7 @@ import csv
 import io
 import os
 import time
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -52,6 +53,7 @@ def running(stack: Stack) -> Stack:
         )
     eng.dispose()
     stack.start_server()
+    stack.start_worker()
     stack.start_collector()
     wait_for(lambda: sample_count(stack) >= 30, 30, "first samples")
     return stack
@@ -187,6 +189,16 @@ def test_dashboard_workspace_csv_and_failure_states(running: Stack, tmp_path: Pa
         notes.get_by_role("button", name="Save correction").click()
         wait_for(lambda: "corrected (rev 2)" in notes.inner_text(), 10, "annotation corrected")
         shot(page, "furnace-annotations-1366x768")
+
+        # durable export: queued, built by the worker process, downloaded with a manifest
+        page.get_by_test_id("request-export").click()
+        link = page.get_by_test_id("export-download").first
+        link.wait_for(timeout=30000)
+        with page.expect_download() as dl:
+            link.click()
+        with zipfile.ZipFile(dl.value.path()) as zf:
+            assert sorted(zf.namelist()) == ["data.csv", "manifest.json"]
+            assert '"simulated": true' in zf.read("manifest.json").decode()
 
         # dilatometer: log-scale pressure panel and signed length change tile
         page.goto(stack.base + "/#/instrument/dil-01")

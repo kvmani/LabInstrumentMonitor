@@ -9,6 +9,7 @@ import { AcqBadge, CollectorBadge, RunBadge, SimBadge } from "./Badges";
 import { ConnectionBanner } from "./ConnectionBanner";
 import { type PanelScale, TimePanels } from "./TimePanels";
 import { AnnotationPanel, NewRunForm, RECORD_ROLES, RunEditForm } from "./Records";
+import { ExportsPanel } from "./Exports";
 import { XYChart } from "./XYChart";
 
 const PRESETS = [
@@ -383,6 +384,8 @@ function Overview({ s, drift, tz, tzLabel, theme, canRecord }: Common & { s: Ins
       </section>
       <div style={{ height: 14 }} />
       <AnnotationPanel instrumentId={s.instrument.id} items={annotations ?? []} canRecord={!!canRecord} tz={tz} tzLabel={tzLabel} onChanged={notes.refresh} />
+      <div style={{ height: 14 }} />
+      <ExportsPanel instrumentId={s.instrument.id} range={range} tz={tz} tzLabel={tzLabel} />
     </>
   );
 }

@@ -230,3 +230,19 @@ export interface SessionInfo {
   display_timezone: string;
   environment: string;
 }
+
+export interface ExportJobView {
+  id: string;
+  instrument_id: string;
+  status: "queued" | "running" | "succeeded" | "failed" | "expired";
+  params: { start: string; end: string; channels: string[] | null; estimated_rows: number };
+  created_at: string;
+  finished_at: string | null;
+  attempts: number;
+  row_count: number | null;
+  byte_size: number | null;
+  sha256: string | null;
+  file_name: string | null;
+  expires_at: string | null;
+  error: string | null;
+}
