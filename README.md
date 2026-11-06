@@ -10,7 +10,8 @@ default, plus an opt-in differential scanning calorimeter.
   agent workflow: [AGENTS.md](AGENTS.md) · engineering standards: [CONTRIBUTING.md](CONTRIBUTING.md) ·
   progress ledger: [TASK_PROGRESS.md](TASK_PROGRESS.md)
 - Decisions: [docs/adr](docs/adr) · local operation and rehearsal:
-  [docs/operations/local-dev.md](docs/operations/local-dev.md) · threat model:
+  [docs/operations/local-dev.md](docs/operations/local-dev.md) · administration:
+  [docs/operations/administration.md](docs/operations/administration.md) · threat model:
   [docs/threat-model.md](docs/threat-model.md)
 - Platform: Ubuntu 24.04, Python 3.12, PostgreSQL 16 · License: [MIT](LICENSE)
 
