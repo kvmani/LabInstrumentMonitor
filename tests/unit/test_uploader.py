@@ -21,11 +21,21 @@ T = datetime(2026, 11, 6, 8, 0, tzinfo=UTC)
 
 def fill(ob: Outbox, n: int) -> None:
     for _ in range(n):
-        ob.append(lambda e, s: Envelope(
-            kind=RecordKind.SAMPLE, collector_id="col-1", spool_epoch=e, seq=s,
-            instrument_id="furnace-01", profile_revision_id="furnace-01-r1",
-            channel_id="furnace-01.pv", value=float(s), quality="good", capture_time=T,
-            simulated=True))
+        ob.append(
+            lambda e, s: Envelope(
+                kind=RecordKind.SAMPLE,
+                collector_id="col-1",
+                spool_epoch=e,
+                seq=s,
+                instrument_id="furnace-01",
+                profile_revision_id="furnace-01-r1",
+                channel_id="furnace-01.pv",
+                value=float(s),
+                quality="good",
+                capture_time=T,
+                simulated=True,
+            )
+        )
 
 
 class Server:
@@ -43,8 +53,12 @@ class Server:
             raise action
         status, extra, headers = action
         if status == 200:
-            payload = {"outcome": "committed", "batch_id": body["batch_id"], "receipt_id": 9,
-                       **extra}
+            payload = {
+                "outcome": "committed",
+                "batch_id": body["batch_id"],
+                "receipt_id": 9,
+                **extra,
+            }
         else:
             payload = extra
         return httpx.Response(status, json=payload, headers=headers)
@@ -107,9 +121,22 @@ def test_rejection_quarantines_and_rebatches(tmp_path: Path) -> None:
     fill(ob, 3)
     epoch = ob.epoch
     server.script = [
-        (422, {"outcome": "rejected", "rejected": [
-            {"collector_id": "col-1", "spool_epoch": epoch, "seq": 2, "code": "type_mismatch",
-             "message": "no"}]}, {}),
+        (
+            422,
+            {
+                "outcome": "rejected",
+                "rejected": [
+                    {
+                        "collector_id": "col-1",
+                        "spool_epoch": epoch,
+                        "seq": 2,
+                        "code": "type_mismatch",
+                        "message": "no",
+                    }
+                ],
+            },
+            {},
+        ),
         (200, {}, {}),
     ]
     assert up.step()[0] is StepResult.REJECTED

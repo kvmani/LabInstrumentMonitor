@@ -52,7 +52,7 @@ def pg_server() -> Iterator[PgServer]:
 
     try:
         datadir = Path(tempfile.mkdtemp(prefix="labmon-test-pg-", dir="/tmp"))  # noqa: S108
-        os.chmod(datadir, 0o755)
+        os.chmod(datadir, 0o755)  # noqa: S103 - the postgres account must traverse it
         cluster = Cluster(datadir=datadir / "data", port=free_port())
         cluster.start()
     except (RuntimeError, OSError) as exc:

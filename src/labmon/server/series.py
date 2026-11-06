@@ -396,7 +396,7 @@ def csv_rows(engine: Engine, instrument_id: str, start: datetime, end: datetime)
             buf.seek(0)
             buf.truncate()
             for row in part:
-                s = row.Sample
+                s = row
                 ch = channels[s.channel_id]
                 value: Any = {"float": s.value_num, "enum": s.value_int}.get(
                     ch.data_type, s.value_bool

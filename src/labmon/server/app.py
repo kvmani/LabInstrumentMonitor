@@ -3,9 +3,10 @@
 The API never contacts instruments. It accepts authenticated collector batches and heartbeats and
 serves scoped, read-only history to signed-in users. Static UI assets are served from a local
 directory; nothing is loaded from external hosts.
-"""
 
-from __future__ import annotations
+No ``from __future__ import annotations`` here: FastAPI must evaluate the closure-scoped
+dependency annotations at definition time.
+"""
 
 import logging
 from collections.abc import Callable

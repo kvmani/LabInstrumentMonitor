@@ -26,8 +26,8 @@ Evidence labels: **simulated** (synthetic sources on a dev machine/CI), **staged
       (`labmon-devdb`), first migration `0001` tested upgrade→downgrade→upgrade (simulated/dev)
 - [x] T2 — furnace profile, deterministic source + virtual clock, ambient fixture, golden
       envelope/batch fixtures, collector, SQLite outbox, `labmon-collector status` (unit-tested)
-- [ ] T3 — batch ingestion, receipts, scoped history endpoint, status endpoint + validations
-      (code written; integration tests in progress)
+- [x] T3 — batch ingestion, receipts, scoped history endpoint, status endpoint + validations
+      (38 integration tests on real PostgreSQL 16; simulated)
 - [ ] T4 — fleet page, live/history chart, simulator label, ranges, gaps, CSV, browser verification
 - [ ] T5 — run instructions, validation results, limits, next milestone (this file + README)
 
@@ -39,3 +39,17 @@ Evidence labels: **simulated** (synthetic sources on a dev machine/CI), **staged
 - Python 3.12.3 (`/usr/bin/python3.12`), linked SQLite 3.45.1 → outbox uses rollback journal
   (`journal_mode=delete`, `synchronous=FULL`), see ADR 0003.
 - **Next:** ingest/status/series integration tests, ADRs, then UI (T4).
+
+### 2026-11-06 — commit 2 (T3 ingest/status/history validated)
+- `pytest tests/unit tests/integration` → **101 passed** (PostgreSQL 16.15 disposable cluster).
+  Covers: duplicate submission, identical retransmission replay, batch-id conflict (409), identity
+  conflict surfaced in `ingest_conflict`, explicit whole-batch rejection + edge re-batch, lost ACK
+  after commit (exactly once), 6 concurrent retransmissions → one receipt, overlapping concurrent
+  batches → no double insert, auth/revocation/foreign collector, gzip expansion cap, future clock
+  flag, equal readings on time stay Receiving, replay cannot refresh freshness, heartbeat does not
+  refresh freshness, offline/delayed/source-unavailable reasons, raw/bucket series with gaps and a
+  one-sample peak, CSV provenance + formula escaping + audit, cross-lab 404s, CSRF/throttle.
+- Fixed during testing: FastAPI closure dependencies need eager annotations in `app.py`; Core
+  entity selects return flat rows (status/CSV).
+- Added ADRs 0001–0003, `docs/threat-model.md`, `docs/dependencies.md`.
+- **Next:** T4 UI (React/Vite/ECharts), process-level recovery test, Playwright happy path.

@@ -13,9 +13,22 @@ from labmon.server.models import Base
 pytestmark = pytest.mark.integration
 
 EXPECTED_TABLES = {
-    "lab", "instrument", "profile_revision", "channel", "collector", "collector_credential",
-    "collector_assignment", "batch_receipt", "ingest_identity", "sample", "acquisition_event",
-    "ingest_conflict", "app_user", "lab_grant", "user_session", "audit_event",
+    "lab",
+    "instrument",
+    "profile_revision",
+    "channel",
+    "collector",
+    "collector_credential",
+    "collector_assignment",
+    "batch_receipt",
+    "ingest_identity",
+    "sample",
+    "acquisition_event",
+    "ingest_conflict",
+    "app_user",
+    "lab_grant",
+    "user_session",
+    "audit_event",
 }
 
 
@@ -46,9 +59,15 @@ def test_models_match_migrated_schema(db_url: str) -> None:
 def test_identity_constraints_exist(db_url: str) -> None:
     insp = inspect(create_engine(db_url))
     assert insp.get_pk_constraint("sample")["constrained_columns"] == [
-        "collector_id", "spool_epoch", "seq"]
+        "collector_id",
+        "spool_epoch",
+        "seq",
+    ]
     assert insp.get_pk_constraint("ingest_identity")["constrained_columns"] == [
-        "collector_id", "spool_epoch", "seq"]
+        "collector_id",
+        "spool_epoch",
+        "seq",
+    ]
     uniques = {tuple(u["column_names"]) for u in insp.get_unique_constraints("batch_receipt")}
     assert ("collector_id", "batch_id") in uniques
     idx = {i["name"]: i["column_names"] for i in insp.get_indexes("sample")}

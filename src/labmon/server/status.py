@@ -204,20 +204,20 @@ def instrument_status(
             }
         )
 
-    acquisition = _acquisition_state(conn, inst.Instrument, assignment, coll, ch_views, now)
-    process = _process_state(inst.Instrument.profile_key, ch_views)
+    acquisition = _acquisition_state(conn, inst, assignment, coll, ch_views, now)
+    process = _process_state(inst.profile_key, ch_views)
     return {
         "server_time": format_utc(now),
         "instrument": {
-            "id": inst.Instrument.id,
-            "name": inst.Instrument.name,
-            "lab_id": inst.Instrument.lab_id,
+            "id": inst.id,
+            "name": inst.name,
+            "lab_id": inst.lab_id,
             "lab_name": inst.lab_name,
-            "asset_id": inst.Instrument.asset_id,
-            "location": inst.Instrument.location,
-            "lifecycle": inst.Instrument.lifecycle,
-            "simulated": inst.Instrument.simulated,
-            "profile_key": inst.Instrument.profile_key,
+            "asset_id": inst.asset_id,
+            "location": inst.location,
+            "lifecycle": inst.lifecycle,
+            "simulated": inst.simulated,
+            "profile_key": inst.profile_key,
         },
         "collector": coll,
         "acquisition": acquisition,

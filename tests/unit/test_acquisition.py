@@ -22,9 +22,11 @@ FIRST_TICK = int(datetime(2026, 11, 6, 8, 0, 1, tzinfo=UTC).timestamp())
 
 def binding(faults: tuple[Fault, ...] = ()) -> InstrumentBinding:
     return InstrumentBinding(
-        instrument_id="furnace-01", profile="sim-furnace", profile_revision_id="furnace-01-r1",
-        seed=42, channels={"pv": "furnace-01.pv", "sp": "furnace-01.sp",
-                           "phase": "furnace-01.phase"},
+        instrument_id="furnace-01",
+        profile="sim-furnace",
+        profile_revision_id="furnace-01-r1",
+        seed=42,
+        channels={"pv": "furnace-01.pv", "sp": "furnace-01.sp", "phase": "furnace-01.phase"},
         faults=faults,
     )
 
@@ -52,7 +54,10 @@ def test_one_frame_per_slot_aligned_to_whole_seconds(setup) -> None:  # type: ig
     assert frames == [f"furnace-01:{FIRST_TICK + i}" for i in range(5)]
     assert samples[0].capture_time == datetime(2026, 11, 6, 8, 0, 1, tzinfo=UTC)
     assert [r.event_type for r in recs if r.kind == "event"] == [
-        "acquisition_started", "spool_epoch_started", "acquisition_stopped"]
+        "acquisition_started",
+        "spool_epoch_started",
+        "acquisition_stopped",
+    ]
     assert [r.seq for r in recs] == list(range(1, len(recs) + 1))
 
 

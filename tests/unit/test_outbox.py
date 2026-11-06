@@ -15,18 +15,31 @@ T = datetime(2026, 11, 6, 8, 0, tzinfo=UTC)
 
 def sample(epoch: int, seq: int, value: float = 1.0, collector: str = "col-1") -> Envelope:
     return Envelope(
-        kind=RecordKind.SAMPLE, collector_id=collector, spool_epoch=epoch, seq=seq,
-        instrument_id="furnace-01", profile_revision_id="furnace-01-r1",
-        channel_id="furnace-01.pv", value=value, quality="good",
-        capture_time=T + timedelta(seconds=seq), simulated=True,
+        kind=RecordKind.SAMPLE,
+        collector_id=collector,
+        spool_epoch=epoch,
+        seq=seq,
+        instrument_id="furnace-01",
+        profile_revision_id="furnace-01-r1",
+        channel_id="furnace-01.pv",
+        value=value,
+        quality="good",
+        capture_time=T + timedelta(seconds=seq),
+        simulated=True,
     )
 
 
 def event(epoch: int, seq: int) -> Envelope:
     return Envelope(
-        kind=RecordKind.EVENT, collector_id="col-1", spool_epoch=epoch, seq=seq,
-        instrument_id="furnace-01", profile_revision_id="furnace-01-r1",
-        event_type=EventType.SOURCE_UNAVAILABLE, capture_time=T, simulated=True,
+        kind=RecordKind.EVENT,
+        collector_id="col-1",
+        spool_epoch=epoch,
+        seq=seq,
+        instrument_id="furnace-01",
+        profile_revision_id="furnace-01-r1",
+        event_type=EventType.SOURCE_UNAVAILABLE,
+        capture_time=T,
+        simulated=True,
     )
 
 

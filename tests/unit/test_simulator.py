@@ -32,8 +32,17 @@ def test_same_seed_same_tick_is_reproducible() -> None:
 
 @pytest.mark.parametrize(
     ("offset", "phase", "sp"),
-    [(0, 0, 25.0), (299, 0, 25.0), (300, 1, 25.0), (2099, 1, 849.54), (2100, 2, 850.0),
-     (3899, 2, 850.0), (3900, 3, 25.0), (6599, 3, 25.0), (6600, 0, 25.0)],
+    [
+        (0, 0, 25.0),
+        (299, 0, 25.0),
+        (300, 1, 25.0),
+        (2099, 1, 849.54),
+        (2100, 2, 850.0),
+        (3899, 2, 850.0),
+        (3900, 3, 25.0),
+        (6599, 3, 25.0),
+        (6600, 0, 25.0),
+    ],
 )
 def test_program_phase_transitions(offset: int, phase: int, sp: float) -> None:
     p, s, _ = FurnaceProgram().state(ANCHOR + offset)
