@@ -5,6 +5,7 @@ import { DEFAULT_ZONE, zoneLabel, zoneName, type Zone } from "./time";
 import type { SessionInfo } from "./types";
 import { Dashboard } from "./components/Dashboard";
 import { InstrumentPage } from "./components/InstrumentPage";
+import { Help } from "./components/Help";
 import { Login } from "./components/Login";
 
 type ThemePref = "system" | "light" | "dark";
@@ -94,8 +95,11 @@ export function App() {
           Simulator-only release
         </span>
         <div className="topnav">
-          <a href="#/" aria-current={m ? undefined : "page"}>
+          <a href="#/" aria-current={route === "#/" || route === "" ? "page" : undefined}>
             Fleet
+          </a>
+          <a href="#/help" aria-current={route === "#/help" ? "page" : undefined}>
+            Help
           </a>
         </div>
         <span className="spacer" />
@@ -121,7 +125,9 @@ export function App() {
         </button>
       </nav>
       <div id="content">
-        {m ? (
+        {route === "#/help" ? (
+          <Help />
+        ) : m ? (
           <InstrumentPage
             key={m[1]}
             id={decodeURIComponent(m[1]!)}

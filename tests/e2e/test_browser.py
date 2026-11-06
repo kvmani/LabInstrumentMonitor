@@ -114,6 +114,12 @@ def test_dashboard_workspace_csv_and_failure_states(running: Stack, tmp_path: Pa
         shot(page, "fleet-table-1366x768")
         page.get_by_role("button", name="Cards", exact=True).click()
 
+        # local help is shipped with the bundle and reachable from the top bar
+        page.get_by_role("link", name="Help", exact=True).click()
+        assert "Stale" in page.get_by_test_id("help").inner_text()
+        page.get_by_role("link", name="Fleet", exact=True).click()
+        page.get_by_test_id("fleet-cards").wait_for()
+
         # two interactions from the fleet to the last 24 hours
         page.get_by_test_id("card-furnace-01").click()
         page.get_by_role("button", name="24 h", exact=True).click()

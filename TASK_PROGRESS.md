@@ -10,7 +10,7 @@ field-verified, and no simulated pass is field acceptance.
   tranche"): MIT license, confirmed Ubuntu 24.04 / Python 3.12 / PostgreSQL 16 baseline,
   manual-only CI with `scripts/check.sh`, UTM + vacuum dilatometer + opt-in DSC simulators,
   runs and XY analyses, redesigned dashboards, rehearsal playback, standards docs.
-- **Active milestone:** M2 (in progress). Next actions are listed at the end of this section.
+- **Active milestone:** M3 preparation (M2 buildable items done). Next actions are listed at the end of this section.
 - **Branches:** `main` and `claude/cool-hawking-huoxx4` carry identical history.
 - **Environment used:** Ubuntu 24.04 container, CPython 3.12.3 (SQLite 3.45.1), PostgreSQL
   16.15, Node 22, Chromium from Playwright 1.63.0. All evidence is **simulated**.
@@ -138,31 +138,31 @@ Defects found and fixed during this checkpoint:
 3. "Delivery delayed" was claimed whenever a heartbeat saw records in flight; now it requires
    the oldest pending record to be older than the 5 s freshness window at heartbeat time.
 
-### Validation (latest)
+**Step 10 — local help (done):** `#/help` page shipped in the web bundle (no external links):
+status words and their meaning taken from the same labels the UI shows, charts and gaps, runs
+and analyses, exports, roles. Browser test opens it from the top bar.
+
+### Validation (latest, step 10)
 
 | Command | Result |
 | --- | --- |
-| `scripts/check.sh` | ruff clean, mypy --strict clean (41 files), **128 passed** (unit + integration, 39.8 s), web typecheck + build clean |
-| `pytest tests/e2e` | **2 passed** (recovery with the 3-instrument fleet; browser dashboard → workspace → CSV → stale → API down, no external requests) |
+| `scripts/check.sh --e2e` | ruff + mypy --strict clean, **182 passed** (unit + integration, 70 s), Prettier/typecheck/build clean, e2e **2 passed** (43 s) |
 
 ### Current limits
 
-- Bucketed history is computed from raw rows (no rollups yet); persisted missing intervals,
-  saved views, annotations, user-created runs, role matrix and durable exports are M2 work.
-- DSC peak areas use a straight baseline across a fixed window and are labelled estimates;
-  extrapolated onset is not computed yet.
-- Playback (`backfill`) must not run while the live collector owns the spool (documented, not
-  enforced by a lock).
+- Nothing is staged or field-verified; the release rehearsal ran in a temporary root without
+  real systemd, reboot or client-workstation TLS.
+- DSC peak areas use a straight baseline and are labelled estimates.
 - The CI workflow has never been dispatched on GitHub; only local gate runs are recorded.
+- No scientist usability review yet.
 
-### Next actions (M2)
+### Next actions (M3)
 
-1. Minute/hour rollups with dirty-bucket invalidation in the ingest transaction; persisted
-   missing intervals; 30-day furnace fixture with a one-sample peak and a dropout; p95 timing.
-2. RUN-01: user-created runs and annotations with audit; saved views and shared templates.
-3. Role matrix and admin audit; durable export worker with manifest and checksums.
-4. Spool ownership lock; DSC extrapolated onset; tensile 0.2 % offset yield.
-5. Scientist usability review of the dashboards, fix findings and repeat.
+1. Staging VM rehearsal of `deploy/install.sh` with real systemd, reboot and TLS from a
+   client workstation (needs an authorized environment).
+2. Windows collector service approach and runbook; PITR runbook for PostgreSQL.
+3. Soak tooling (72 h simulated fleet) with spool, latency and memory evidence.
+4. Scientist usability review of the dashboards, fix findings and repeat.
 
 ## Checkpoint 1 — First implementation tranche
 
