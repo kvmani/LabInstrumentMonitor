@@ -59,3 +59,15 @@ def test_unrecovered_fault_and_holes_fail() -> None:
     checks = by_name(verdict(samples, False, ledger, [fault(95, 100)], 10))
     assert not checks["fault recovery"]
     assert not checks["ledger complete"] and not checks["outbox drained"]
+
+
+def test_interval_spanning_the_restart_is_not_recovery() -> None:
+    # regression: the first sample after the restart (t=60 s) mostly covers pre-kill uploads, so
+    # its low p95 must not count as recovery; the catch-up interval after it is in the window
+    samples = [sample(i) for i in range(20)]
+    samples[6] = sample(6, p95=0.8, backlog=80)
+    samples[7] = sample(7, p95=12.0)
+    faults = [fault(52, 58)]
+    checks = by_name(verdict(samples, True, LEDGER, faults, 10))
+    assert checks["ingest latency"], "catch-up must be excluded as recovery"
+    assert faults[0]["recovered_after_s"] == 22.0  # t=80 s, the first interval after catch-up

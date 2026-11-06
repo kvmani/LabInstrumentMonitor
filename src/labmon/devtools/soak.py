@@ -278,11 +278,13 @@ def verdict(
     recoveries: list[float | None] = []
     for f in faults:
         lo, up = ts(f["at"]), ts(f["until"])
+        # the interval must *start* after the restart: the first sample after it mostly holds
+        # readings uploaded before the kill and says nothing about catch-up
         rec = next(
             (
                 ts(s["t"])
-                for s in samples
-                if ts(s["t"]) > up
+                for prev, s in zip(samples, samples[1:], strict=False)
+                if ts(prev["t"]) >= up
                 and s["ingest"]["p95_latency_s"] is not None
                 and s["ingest"]["p95_latency_s"] <= MAX_P95_LATENCY_S
                 and (s["outbox"].get("unacknowledged") or 0) <= STEADY_BACKLOG
