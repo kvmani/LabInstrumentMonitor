@@ -29,6 +29,7 @@ dev = [
 labmon-server = "labmon.server.cli:main"
 labmon-collector = "labmon.collector.cli:main"
 labmon-devdb = "labmon.devtools.pgcluster:main"
+labmon-soak = "labmon.devtools.soak:main"
 
 [build-system]
 requires = ["hatchling>=1.25"]

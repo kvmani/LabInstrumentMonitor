@@ -106,6 +106,28 @@ pkill -f "labmon-collector run"; pkill -f "labmon-server serve"
 | Restart the collector | Same spool epoch, sequence continues; the stopped interval is shown as an explicit gap |
 | Revoke the credential (`UPDATE collector_credential SET revoked_at = now()`) | Collector reports an upload fault and keeps spooling; nothing is dropped |
 
+## Soak runs (simulated release evidence)
+
+`labmon-soak` runs the API, worker and collector as separate processes against a **dedicated**
+database (it migrates it and bootstraps the demo fleet with the DSC), optionally kills the API on
+a schedule, and samples memory, open descriptors, outbox backlog, ingest latency
+(`receive_time - capture_time`), staleness per instrument, database size and dirty rollup
+minutes. At the end it stops the collector, uploads the rest with `labmon-collector flush` and
+checks that every spooled record reached the ledger once.
+
+```bash
+createdb -h 127.0.0.1 -p 55432 -U labmon labmon_soak        # or any scratch database
+.venv/bin/labmon-soak --database-url postgresql+psycopg://labmon@127.0.0.1:55432/labmon_soak \
+    --hours 72 --interval 60 --restart-api-every 240 --out test-results/soak-72h
+```
+
+Output: `samples.jsonl` (one line per interval) and `summary.json` (verdict, faults with
+recovery times, ledger). Checks: RSS growth ≤ 64 MB and descriptor growth ≤ 32 per process after
+warm-up, interval p95 latency ≤ 10 s outside fault recovery, each API kill recovered within 90 s,
+outbox drained, no sequence holes or ingest conflicts. Exit 0 means all passed. The e2e suite
+runs a 45 s version with two API kills. Evidence from it is **simulated**; record the host, CPU,
+RAM and versions with any result you keep.
+
 ## Tests
 
 ```bash

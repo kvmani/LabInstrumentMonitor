@@ -45,5 +45,15 @@ labmon-server admin collector-revoke col-m1                            # stops u
 Transfer `collector.toml` and the token file to the instrument PC through the approved channel;
 the token file must stay owner-readable only (the collector refuses group/other-readable files).
 After rotating a token, restart the collector; the spool keeps every reading meanwhile.
+
+To retire a collector host, stop the collector service, then upload what is left and confirm:
+
+```bash
+labmon-collector flush --config collector.toml --timeout 300   # exit 0: every record acknowledged
+labmon-collector status --config collector.toml                # capacity 0/…
+```
+
+`flush` acquires nothing and takes the spool lock, so it refuses to run beside the service.
+Only revoke the credential after `flush` succeeded.
 Profiles available: `sim-furnace`, `sim-utm`, `sim-dilatometer`, `sim-dsc` (opt-in) and
 `sim-ambient` (smoke fixture).

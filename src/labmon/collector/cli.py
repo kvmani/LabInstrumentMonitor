@@ -2,6 +2,7 @@
 
 labmon-collector run --config collector.toml       # acquire, spool, upload, heartbeat
 labmon-collector status --config collector.toml    # pending / acknowledged counts
+labmon-collector flush --config collector.toml     # upload the backlog only, then exit
 labmon-collector quarantine --config collector.toml
 """
 
@@ -23,7 +24,7 @@ import httpx
 from labmon.collector.acquisition import Acquisition
 from labmon.collector.config import CollectorConfig, load_config
 from labmon.collector.outbox import Outbox, OutboxError
-from labmon.collector.uploader import Heartbeat, Uploader
+from labmon.collector.uploader import Heartbeat, StepResult, Uploader
 from labmon.sim.clock import SystemClock, VirtualClock
 
 log = logging.getLogger("labmon.collector")
@@ -182,6 +183,44 @@ def cmd_backfill(cfg: CollectorConfig, hours: float) -> int:
     return 0
 
 
+def cmd_flush(cfg: CollectorConfig, timeout_s: float) -> int:
+    """Upload what the outbox holds without acquiring, then exit. Use with the collector service
+    stopped (it takes the spool lock), e.g. before retiring a collector host. Exit 0 when the
+    outbox is empty, 1 on a fault or when the timeout passes with records still unacknowledged."""
+    clock = SystemClock()
+    token = cfg.read_token()
+    try:
+        outbox = open_outbox(cfg)
+    except OutboxError as exc:
+        print(f"labmon-collector: {exc}", file=sys.stderr)
+        return 3
+    client = make_client(cfg)
+    uploader = Uploader(outbox, client, token, clock, max_backoff_s=min(cfg.max_backoff_s, 5.0))
+    deadline = clock.monotonic() + timeout_s
+    try:
+        while True:
+            result, wait = uploader.step()
+            if result is StepResult.IDLE and outbox.counts().unacknowledged == 0:
+                print("outbox empty: every record is acknowledged")
+                return 0
+            if result is StepResult.FAULT:
+                print(f"labmon-collector: upload fault: {uploader.fault}", file=sys.stderr)
+                return 1
+            if clock.monotonic() + wait > deadline:
+                c = outbox.counts()
+                print(
+                    f"labmon-collector: {c.unacknowledged} records still unacknowledged "
+                    f"after {timeout_s:.0f} s",
+                    file=sys.stderr,
+                )
+                return 1
+            if wait > 0:
+                clock.sleep(wait, threading.Event())
+    finally:
+        client.close()
+        outbox.close()
+
+
 def cmd_quarantine(cfg: CollectorConfig) -> int:
     outbox = open_outbox(cfg, read_only=True)
     try:
@@ -194,13 +233,15 @@ def cmd_quarantine(cfg: CollectorConfig) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="labmon-collector")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("run", "status", "quarantine", "backfill"):
+    for name in ("run", "status", "quarantine", "backfill", "flush"):
         p = sub.add_parser(name)
         p.add_argument("--config", type=Path, required=True)
         if name == "status":
             p.add_argument("--json", action="store_true")
         if name == "backfill":
             p.add_argument("--hours", type=float, default=2.0)
+        if name == "flush":
+            p.add_argument("--timeout", type=float, default=300.0, help="seconds")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)  # one line per request is noise
@@ -209,6 +250,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_run(cfg)
     if args.command == "backfill":
         return cmd_backfill(cfg, args.hours)
+    if args.command == "flush":
+        return cmd_flush(cfg, args.timeout)
     if args.command == "status":
         return cmd_status(cfg, args.json)
     return cmd_quarantine(cfg)
