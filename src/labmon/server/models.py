@@ -21,6 +21,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -427,3 +428,33 @@ class SavedView(Base):
     config: Mapped[dict[str, Any]] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(TS)
     deleted_at: Mapped[datetime | None] = mapped_column(TS)
+
+
+class CommissioningDraft(Base):
+    """A resumable commissioning-wizard draft (ONB-01). Publishing creates a profile revision."""
+
+    __tablename__ = "commissioning_draft"
+    __table_args__ = (
+        Index("ix_commissioning_draft_lab", "lab_id"),
+        Index(
+            "uq_commissioning_draft_open",
+            "instrument_id",
+            unique=True,
+            postgresql_where=text("state = 'draft'"),
+        ),
+        CheckConstraint("state IN ('draft','published','abandoned')", name="state"),
+        CheckConstraint("step BETWEEN 1 AND 6", name="step"),
+    )
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    lab_id: Mapped[str] = mapped_column(ForeignKey("lab.id"))
+    instrument_id: Mapped[str] = mapped_column(Text)
+    state: Mapped[str] = mapped_column(Text)
+    step: Mapped[int] = mapped_column(Integer)
+    data: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    preview: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    created_by: Mapped[int] = mapped_column(ForeignKey("app_user.id"))
+    updated_by: Mapped[int] = mapped_column(ForeignKey("app_user.id"))
+    created_at: Mapped[datetime] = mapped_column(TS)
+    updated_at: Mapped[datetime] = mapped_column(TS)
+    published_revision_id: Mapped[str | None] = mapped_column(ForeignKey("profile_revision.id"))
+    published_at: Mapped[datetime | None] = mapped_column(TS)

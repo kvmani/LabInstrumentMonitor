@@ -39,6 +39,7 @@ from labmon.contracts.envelope import (
 )
 from labmon.sim.base import RunInfo, Source, SourceReading, SourceUnavailable
 from labmon.sim.clock import Clock
+from labmon.sim.preview import range_checked
 from labmon.sim.sources import build_source
 
 log = logging.getLogger(__name__)
@@ -140,15 +141,8 @@ class Acquisition:
         builders: list[Callable[[int, int], Envelope]] = []
         for ch in reading.channels:
             spec = profile.channel(ch.key)
-            value, quality, reason = ch.value, ch.quality, ch.quality_reason
-            if (
-                quality is Quality.GOOD
-                and isinstance(value, float)
-                and spec.valid_min is not None
-                and spec.valid_max is not None
-                and not spec.valid_min <= value <= spec.valid_max
-            ):
-                quality, reason = Quality.BAD, QualityReason.OVERRANGE
+            value = ch.value
+            quality, reason = range_checked(spec, value, ch.quality, ch.quality_reason)
             if confidence is ClockConfidence.SUSPECT and quality is Quality.GOOD:
                 quality, reason = Quality.UNCERTAIN, QualityReason.CLOCK_SUSPECT
             fields: dict[str, Any] = {
@@ -364,6 +358,8 @@ class Acquisition:
         return [
             {
                 "instrument_id": st.binding.instrument_id,
+                # the applied profile revision: commissioning shows activation only once it matches
+                "profile_revision_id": st.binding.profile_revision_id,
                 "state": self.stats.source_states.get(st.binding.instrument_id, "waiting"),
                 **({"reason": st.reason} if st.reason else {}),
             }

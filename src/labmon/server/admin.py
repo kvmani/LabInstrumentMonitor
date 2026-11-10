@@ -16,27 +16,24 @@ from typing import Any
 from sqlalchemy import Connection, Engine, delete, insert, select, update
 
 from labmon.profiles import PROFILES
+from labmon.server import provisioning
 from labmon.server.bootstrap import (
     InstrumentSeed,
     assign,
     ensure_collector,
     ensure_instrument,
     ensure_lab,
-    write_collector_config,
     write_secret,
 )
 from labmon.server.models import (
     AppUser,
     Collector,
-    CollectorAssignment,
-    CollectorCredential,
     Instrument,
     Lab,
     LabGrant,
-    ProfileRevision,
     UserSession,
 )
-from labmon.server.security import ROLES, audit, hash_password, issue_collector_credential
+from labmon.server.security import ROLES, audit, hash_password
 
 
 class AdminError(Exception):
@@ -185,19 +182,10 @@ def issue_token(engine: Engine, collector_id: str, out: Path, keep_existing: boo
     """Issue a credential into an owner-only file; by default revoke the previous ones."""
     now = _now()
     with engine.begin() as c:
-        if c.execute(select(Collector.id).where(Collector.id == collector_id)).first() is None:
-            raise AdminError(f"unknown collector {collector_id!r}")
-        revoked = 0
-        if not keep_existing:
-            revoked = c.execute(
-                update(CollectorCredential)
-                .where(
-                    CollectorCredential.collector_id == collector_id,
-                    CollectorCredential.revoked_at.is_(None),
-                )
-                .values(revoked_at=now)
-            ).rowcount
-        token = issue_collector_credential(c, collector_id)
+        try:
+            token, revoked = provisioning.issue_credential(c, collector_id, now, keep_existing)
+        except provisioning.ProvisioningError as exc:
+            raise AdminError(exc.message) from exc
         write_secret(out, token)
         audit(
             c,
@@ -213,15 +201,7 @@ def issue_token(engine: Engine, collector_id: str, out: Path, keep_existing: boo
 def revoke_collector(engine: Engine, collector_id: str) -> None:
     now = _now()
     with engine.begin() as c:
-        n = c.execute(
-            update(CollectorCredential)
-            .where(
-                CollectorCredential.collector_id == collector_id,
-                CollectorCredential.revoked_at.is_(None),
-            )
-            .values(revoked_at=now)
-        ).rowcount
-        c.execute(update(Collector).where(Collector.id == collector_id).values(revoked_at=now))
+        n = provisioning.revoke_collector(c, collector_id, now)
         audit(c, now, "cli", actor(), "collector_revoke", collector_id, {"credentials": n})
 
 
@@ -280,37 +260,16 @@ def enrol_simulated(
 def write_config(engine: Engine, collector_id: str, server_url: str, out_dir: Path) -> Path:
     """Write ``collector.toml`` for every instrument currently assigned to the collector."""
     with engine.connect() as c:
-        rows = c.execute(
-            select(Instrument.id, Instrument.name, Instrument.profile_key)
-            .join(CollectorAssignment, CollectorAssignment.instrument_id == Instrument.id)
-            .where(
-                CollectorAssignment.collector_id == collector_id,
-                CollectorAssignment.valid_to.is_(None),
+        try:
+            text = provisioning.config_text(
+                c, collector_id, server_url, "`labmon-server admin collector-config`"
             )
-            .order_by(Instrument.id)
-        ).all()
-        seeds = []
-        for iid, name, profile in rows:
-            rev = c.execute(_latest_revision(iid)).one()
-            seeds.append(
-                (
-                    InstrumentSeed(iid, name, profile, int((rev.definition or {}).get("seed", 0))),
-                    rev.id,
-                )
-            )
-    if not seeds:
-        raise AdminError(f"collector {collector_id!r} has no current assignments")
+        except provisioning.ProvisioningError as exc:
+            raise AdminError(exc.message) from exc
     out_dir.mkdir(parents=True, exist_ok=True)
-    return write_collector_config(out_dir, collector_id, server_url, seeds)
-
-
-def _latest_revision(instrument_id: str) -> Any:
-    return (
-        select(ProfileRevision.id, ProfileRevision.definition)
-        .where(ProfileRevision.instrument_id == instrument_id)
-        .order_by(ProfileRevision.revision.desc())
-        .limit(1)
-    )
+    path = out_dir / "collector.toml"
+    path.write_text(text, encoding="utf-8")
+    return path
 
 
 def read_password(from_stdin: bool) -> str:

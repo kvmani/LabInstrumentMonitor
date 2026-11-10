@@ -30,7 +30,7 @@ from labmon.contracts.envelope import (
     canonical_json,
     format_utc,
 )
-from labmon.server import analysis, migrate
+from labmon.server import analysis, commissioning, migrate
 from labmon.server.analysis import load_frames
 from labmon.server.db import make_engine
 from labmon.server.diagnostics import system_health
@@ -687,6 +687,102 @@ def create_app(
             media_type="text/csv; charset=utf-8",
             headers={"Content-Disposition": f'attachment; filename="{fname}"'},
         )
+
+    # --- commissioning wizard and collector provisioning (ONB-01, §8) --------------------------
+
+    @app.get("/api/v1/commissioning/options")
+    def get_commissioning_options(p: User) -> dict[str, Any]:
+        return _records(lambda c: commissioning.options(c, p, now()))
+
+    @app.get("/api/v1/commissioning/drafts")
+    def get_drafts(p: User) -> dict[str, Any]:
+        return _records(lambda c: {"items": commissioning.list_drafts(c, p, now())})
+
+    @app.post(
+        "/api/v1/commissioning/drafts",
+        status_code=201,
+        dependencies=[Depends(require_same_origin)],
+    )
+    def post_draft(body: commissioning.DraftCreate, p: User) -> dict[str, Any]:
+        return _records(lambda c: commissioning.create_draft(c, p, body, now()))
+
+    @app.get("/api/v1/commissioning/drafts/{draft_id}")
+    def get_draft(draft_id: str, p: User) -> dict[str, Any]:
+        return _records(lambda c: commissioning.get_draft(c, p, draft_id, now()))
+
+    @app.patch(
+        "/api/v1/commissioning/drafts/{draft_id}", dependencies=[Depends(require_same_origin)]
+    )
+    def patch_draft(draft_id: str, body: commissioning.DraftUpdate, p: User) -> dict[str, Any]:
+        return _records(lambda c: commissioning.update_draft(c, p, draft_id, body, now()))
+
+    @app.post(
+        "/api/v1/commissioning/drafts/{draft_id}/abandon",
+        dependencies=[Depends(require_same_origin)],
+    )
+    def abandon_draft(draft_id: str, p: User) -> dict[str, Any]:
+        return _records(lambda c: commissioning.abandon_draft(c, p, draft_id, now()))
+
+    @app.post(
+        "/api/v1/commissioning/drafts/{draft_id}/preview",
+        dependencies=[Depends(require_same_origin)],
+    )
+    def preview_draft(draft_id: str, p: User) -> dict[str, Any]:
+        return _records(lambda c: commissioning.preview_draft(c, p, draft_id, now()))
+
+    @app.post(
+        "/api/v1/commissioning/drafts/{draft_id}/publish",
+        dependencies=[Depends(require_same_origin)],
+    )
+    def publish_draft(draft_id: str, p: User) -> dict[str, Any]:
+        return _records(lambda c: commissioning.publish_draft(c, p, draft_id, now()))
+
+    @app.get("/api/v1/commissioning/drafts/{draft_id}/verify")
+    def verify_draft(draft_id: str, p: User) -> dict[str, Any]:
+        return _records(lambda c: commissioning.verify_draft(c, p, draft_id, now()))
+
+    @app.get("/api/v1/commissioning/drafts/{draft_id}/record")
+    def commissioning_record(draft_id: str, p: User) -> dict[str, Any]:
+        return _records(lambda c: commissioning.commissioning_record(c, p, draft_id, now()))
+
+    @app.get("/api/v1/collectors")
+    def get_collectors(p: User) -> dict[str, Any]:
+        return _records(lambda c: {"items": commissioning.list_collectors(c, p, now())})
+
+    @app.post("/api/v1/collectors", status_code=201, dependencies=[Depends(require_same_origin)])
+    def post_collector(body: commissioning.CollectorCreate, p: User) -> dict[str, Any]:
+        return _records(lambda c: commissioning.create_collector(c, p, body, now()))
+
+    @app.post(
+        "/api/v1/collectors/{collector_id}/package", dependencies=[Depends(require_same_origin)]
+    )
+    def post_collector_package(
+        collector_id: str, body: commissioning.PackageRequest, p: User
+    ) -> Response:
+        allow_http = settings.environment != "production"
+        try:
+            with engine.begin() as conn:
+                data, name = commissioning.collector_package(
+                    conn, p, collector_id, body, now(), allow_http
+                )
+        except RecordError as exc:
+            raise HTTPException(exc.status, exc.message) from exc
+        return Response(
+            data,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f'attachment; filename="{name}"',
+                "Cache-Control": "no-store",
+            },
+        )
+
+    @app.post(
+        "/api/v1/collectors/{collector_id}/revoke", dependencies=[Depends(require_same_origin)]
+    )
+    def post_collector_revoke(
+        collector_id: str, body: commissioning.RevokeRequest, p: User
+    ) -> dict[str, Any]:
+        return _records(lambda c: commissioning.revoke_collector(c, p, collector_id, body, now()))
 
     @app.api_route("/api/{rest:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
     def api_not_found(rest: str) -> JSONResponse:
