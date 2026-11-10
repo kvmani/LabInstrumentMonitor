@@ -125,7 +125,7 @@ Output: `samples.jsonl` (one line per interval) and `summary.json` (verdict, fau
 recovery times, ledger). Checks: RSS growth ≤ 64 MB and descriptor growth ≤ 32 per process after
 warm-up, interval p95 latency ≤ 10 s outside fault recovery, each API kill recovered within 90 s,
 outbox drained, no sequence holes or ingest conflicts. Exit 0 means all passed. The e2e suite
-runs a 45 s version with two API kills. Evidence from it is **simulated**; record the host, CPU,
+runs a 60 s version with two API kills. Evidence from it is **simulated**; record the host, CPU,
 RAM and versions with any result you keep.
 
 ## Tests

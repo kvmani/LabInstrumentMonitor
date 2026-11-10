@@ -11,7 +11,8 @@ the operator shell first.
 | --- | --- |
 | viewer, auditor | read instruments, history, runs, annotations, exports of their labs; personal saved views |
 | scientist | as viewer, plus create and correct run records and annotations |
-| custodian, administrator | as scientist, plus share saved views as lab templates |
+| custodian | as scientist, plus share saved views as lab templates and commission instruments (wizard) |
+| administrator | as custodian, plus add collectors, download collector packages and credentials, revoke collectors (web UI) |
 
 Instrument control does not exist in v1 for any role.
 
@@ -30,7 +31,31 @@ labmon-server admin user-list
 Passwords are never accepted as arguments (they would land in shell history); use the prompt or
 `--password-stdin` from a protected file or secret store.
 
-## Collectors and simulated instruments
+## Commissioning in the web UI (custodian, administrator)
+
+**Commission** runs the six-step wizard (SPECIFICATIONS §8, ADR 0008): identify, connect
+(profile and seed), map (documented channels), preview (simulator plus a dropout drill), approve
+(compare and publish an immutable revision) and verify. Drafts are stored on the server and
+resume after an interruption. Publishing needs a passing preview of exactly the drafted profile
+and seed. Re-commissioning an existing instrument publishes revision N+1 and keeps the earlier
+revisions. Changing the profile type or moving the instrument to another collector is refused.
+
+After publishing, an administrator opens **Collectors**:
+
+- **Configuration** downloads a ZIP with `collector.toml` for the collector's current
+  assignments. The installed credential stays valid.
+- **New credential** adds a new `collector.token` and revokes the previous credentials at once.
+  The archive is the only copy of the token; the server keeps only its digest. Production
+  packages require an `https://` monitor URL.
+- **Revoke** stops uploads at once. Run `labmon-collector flush` first when retiring a PC.
+
+Install the files through the approved channel, restrict the token file (Linux 0600; Windows,
+see deployment.md §6) and restart the collector. The wizard's Verify step shows **Active** only
+after the collector reports the new revision in its heartbeat and its first samples are
+committed. Print or download the commissioning record. Every step is audited with actor
+`user:<name>`.
+
+## Collectors and simulated instruments (CLI)
 
 ```bash
 labmon-server admin collector-add col-m1 --lab metals --name "Metals bay PC"

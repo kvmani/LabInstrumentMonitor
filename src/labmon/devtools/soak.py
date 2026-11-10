@@ -45,6 +45,7 @@ MAX_FD_GROWTH = 32
 MAX_P95_LATENCY_S = 10.0
 DRAIN_TIMEOUT_S = 120.0
 MAX_RECOVERY_S = 90.0  # collector backoff cap (60 s by default) plus catch-up
+MIN_OBSERVE_AFTER_FAULT_S = 20.0
 STEADY_BACKLOG = 500  # records; a few seconds of the demo fleet
 
 
@@ -362,7 +363,13 @@ def run(
         with (out / "samples.jsonl").open("w") as fh:
             while time.monotonic() - t0 < duration_s:
                 time.sleep(interval_s)
-                if next_fault is not None and time.monotonic() >= next_fault:
+                # never inject a fault whose recovery the run cannot observe any more
+                remaining = duration_s - (time.monotonic() - t0)
+                if (
+                    next_fault is not None
+                    and time.monotonic() >= next_fault
+                    and remaining >= max(MIN_OBSERVE_AFTER_FAULT_S, 5 * interval_s)
+                ):
                     soak.inject_api_kill()
                     next_fault = time.monotonic() + (restart_api_every_s or 0)
                 row = soak.sample(engine, since)

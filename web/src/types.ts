@@ -285,3 +285,151 @@ export interface ExportJobView {
   expires_at: string | null;
   error: string | null;
 }
+
+// --- commissioning (ONB-01) and collectors -------------------------------------------------
+
+export interface ProfileChannel {
+  key: string;
+  name: string;
+  quantity: string;
+  unit: string;
+  data_type: string;
+  role: string;
+  expected_cadence_s: number;
+  valid_min: number | null;
+  valid_max: number | null;
+  enum_labels?: Record<string, string> | null;
+  note?: string | null;
+}
+
+export interface ProfileSummary {
+  key: string;
+  title: string;
+  adapter: string;
+  adapter_version: string;
+  opt_in: boolean;
+  sign_convention: string | null;
+  cadence_note: string | null;
+  source_time_meaning: string;
+  channels: ProfileChannel[];
+}
+
+export interface CollectorView {
+  id: string;
+  lab_id: string;
+  name: string;
+  revoked: boolean;
+  last_heartbeat_at: string | null;
+  heartbeat_age_s: number | null;
+  online: boolean;
+  software_version: string | null;
+  sampling: boolean | null;
+  upload_fault: string | null;
+  sources: { instrument_id: string; state: string; profile_revision_id?: string }[];
+  assigned_instruments: string[];
+  active_credentials: number;
+}
+
+export interface CommissioningOptions {
+  labs: { id: string; role: string }[];
+  can_provision: string[];
+  profiles: ProfileSummary[];
+  collectors: CollectorView[];
+  custodians: Record<string, { username: string; display_name: string }[]>;
+  instruments: { id: string; lab_id: string; name: string; profile: string }[];
+  steps: string[];
+}
+
+export interface DraftData {
+  name?: string;
+  location?: string;
+  asset_id?: string;
+  custodian?: string;
+  collector_id?: string;
+  interface_ref?: string;
+  mode?: "simulated";
+  profile?: string;
+  seed?: number;
+  notes?: string;
+}
+
+export interface Check {
+  name: string;
+  ok: boolean;
+  detail: string;
+}
+
+export interface DraftView {
+  id: string;
+  lab_id: string;
+  instrument_id: string;
+  state: "draft" | "published" | "abandoned";
+  step: number;
+  step_name: string;
+  data: DraftData;
+  preview: {
+    ok: boolean;
+    at: string;
+    profile: string;
+    seed: number;
+    checks: Check[];
+    stale: boolean;
+  } | null;
+  missing: string[];
+  existing: (DraftData & { revision: number | null; revision_id: string | null }) | null;
+  changes: { field: string; before: unknown; after: unknown }[];
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  published_revision_id: string | null;
+  published_at: string | null;
+}
+
+export interface PreviewFrame {
+  t: string;
+  unavailable?: string;
+  run?: string;
+  channels?: Record<
+    string,
+    {
+      value: number | boolean | null;
+      raw: string | null;
+      quality: string;
+      reason: string | null;
+      unit: string;
+    }
+  >;
+}
+
+export interface PreviewResult {
+  ok: boolean;
+  profile: string;
+  seed: number;
+  window: { start: string; end: string; frames: number };
+  channels: ProfileChannel[];
+  frames: PreviewFrame[];
+  trend: Record<string, [string, number | null][]>;
+  drill: { fault: string; from: string; to: string; unavailable_frames: number };
+  checks: Check[];
+}
+
+export interface VerifyResult {
+  state: "awaiting_collector" | "awaiting_samples" | "receiving";
+  revision_id: string;
+  collector: {
+    id: string;
+    heartbeat_age_s: number | null;
+    online: boolean;
+    applied_revision_id: string | null;
+    source_state: string | null;
+  };
+  samples: { count: number; first_received: string | null; last_received: string | null };
+  latest: {
+    channel_id: string;
+    value: number | boolean | null;
+    quality: string;
+    event_time: string;
+  }[];
+  checked_at: string;
+}

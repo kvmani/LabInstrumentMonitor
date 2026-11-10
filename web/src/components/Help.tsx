@@ -111,11 +111,48 @@ export function Help() {
       </section>
 
       <section className="card card-pad">
+        <h2>Commissioning an instrument</h2>
+        <p>
+          Custodians and administrators open <strong>Commission</strong>. The wizard saves a draft
+          on the server after every step, so you can stop and resume from the list of open drafts.
+        </p>
+        <ol>
+          <li>
+            <strong>Identify:</strong> name, location, asset id, custodian and collector. The
+            collector check shows whether it sent a heartbeat in the last 30 s.
+          </li>
+          <li>
+            <strong>Connect:</strong> choose the simulator profile and seed. The same seed always
+            gives the same readings.
+          </li>
+          <li>
+            <strong>Map:</strong> review the documented channels, units, cadence and valid ranges.
+          </li>
+          <li>
+            <strong>Preview:</strong> runs the simulator with the collector&apos;s quality rules and
+            a scripted dropout. Publishing needs a passing preview of the chosen profile and seed.
+          </li>
+          <li>
+            <strong>Approve:</strong> compare with the active revision and publish. Publishing
+            writes a new, unchangeable profile revision.
+          </li>
+          <li>
+            <strong>Verify:</strong> an administrator downloads the collector configuration from{" "}
+            <strong>Collectors</strong> and restarts the collector. The instrument shows as active
+            only after the collector reports the new revision and its first samples are stored.
+            Until then the previous revision stays in service. Print or download the commissioning
+            record.
+          </li>
+        </ol>
+      </section>
+
+      <section className="card card-pad">
         <h2>Roles</h2>
         <p>
           Viewers read data and keep personal views. Scientists also record runs and annotations.
-          Custodians and administrators can share views as lab templates. Accounts are managed by
-          the site administrator.
+          Custodians also share views as lab templates and commission instruments. Administrators
+          can do all of that and also add collectors, issue collector credentials and revoke
+          collectors. Accounts are managed by the site administrator.
         </p>
       </section>
     </main>

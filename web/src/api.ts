@@ -8,7 +8,7 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function send(path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   if (init.method && init.method !== "GET") {
     headers.set("X-Labmon-Request", "1");
@@ -35,7 +35,27 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     }
     throw new ApiError(res.status, detail);
   }
-  return (await res.json()) as T;
+  return res;
+}
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  return (await (await send(path, init)).json()) as T;
+}
+
+/** POST that answers with a file (e.g. a collector package); saved through a temporary link. */
+async function download(path: string, body: unknown): Promise<string> {
+  const res = await send(path, { method: "POST", body: JSON.stringify(body) });
+  const m = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") ?? "");
+  const name = m?.[1] ?? "download.bin";
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return name;
 }
 
 export const api = {
@@ -45,6 +65,7 @@ export const api = {
   patch: <T>(path: string, body: unknown) =>
     request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
   del: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  download,
 };
 
 export function qs(params: Record<string, string | number | undefined>): string {

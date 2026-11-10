@@ -6,6 +6,8 @@ import type { SessionInfo } from "./types";
 import { Dashboard } from "./components/Dashboard";
 import { InstrumentPage } from "./components/InstrumentPage";
 import { Help } from "./components/Help";
+import { COMMISSION_ROLES, CommissionHome, Wizard } from "./components/Commission";
+import { Collectors } from "./components/Collectors";
 import { Login } from "./components/Login";
 
 type ThemePref = "system" | "light" | "dark";
@@ -65,6 +67,8 @@ export function App() {
   const tz = zoneName(zone, displayTz);
   const tzLabel = zoneLabel(zone, displayTz);
   const m = /^#\/instrument\/([^/]+)$/.exec(route);
+  const wizard = /^#\/commission\/([^/]+)$/.exec(route);
+  const commissioner = Object.values(session.labs).some((r) => COMMISSION_ROLES.has(r));
   const nextTheme: Record<ThemePref, ThemePref> = {
     system: "light",
     light: "dark",
@@ -98,6 +102,19 @@ export function App() {
           <a href="#/" aria-current={route === "#/" || route === "" ? "page" : undefined}>
             Fleet
           </a>
+          {commissioner && (
+            <a
+              href="#/commission"
+              aria-current={route.startsWith("#/commission") ? "page" : undefined}
+            >
+              Commission
+            </a>
+          )}
+          {commissioner && (
+            <a href="#/collectors" aria-current={route === "#/collectors" ? "page" : undefined}>
+              Collectors
+            </a>
+          )}
           <a href="#/help" aria-current={route === "#/help" ? "page" : undefined}>
             Help
           </a>
@@ -127,6 +144,12 @@ export function App() {
       <div id="content">
         {route === "#/help" ? (
           <Help />
+        ) : route === "#/commission" ? (
+          <CommissionHome tz={tz} />
+        ) : wizard ? (
+          <Wizard key={wizard[1]} id={decodeURIComponent(wizard[1]!)} tz={tz} />
+        ) : route === "#/collectors" ? (
+          <Collectors labs={session.labs} tz={tz} />
         ) : m ? (
           <InstrumentPage
             key={m[1]}
