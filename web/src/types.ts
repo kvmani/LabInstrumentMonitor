@@ -95,6 +95,7 @@ export interface SystemHealth {
   export_jobs: Record<string, number>;
   database_bytes: number;
   export_disk: { free_bytes: number; total_bytes: number } | null;
+  tls: { status: "ok" | "warn" | "fail"; detail: string; days_left?: number } | null;
   faults: Fault[];
 }
 

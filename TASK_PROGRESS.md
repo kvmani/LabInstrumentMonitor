@@ -160,12 +160,35 @@ pointed at a missing file. Rehearsed offline in a temporary root. Runbook correc
 acknowledged records are not re-sent after a restore (no command exists yet), so the interval
 between the recovery target and the stop stays a gap.
 
-### Validation (latest, step 12)
+**Step 13 — commissioning wizard and collector provisioning (done, simulated):** migration
+`0007` (resumable drafts). Commissioning API and six-step UI for custodians and administrators:
+identify with a live collector check, connect, read-only map, preview, approve, verify. The
+preview runs the same simulator and the same range rule as the collector, plus a dropout drill.
+Publish needs a passing preview of the drafted profile and seed and writes an immutable revision
+(re-commission → rN+1). Verify shows *Active* only after the collector's heartbeat names the
+revision and samples carrying it are committed. Collectors page for administrators: add, download
+configuration or a new credential (old ones revoked, `no-store`, never audited in clear), revoke.
+Docs: ADR 0008, administration guide, local help. Browser evidence: a custodian commissions a
+dilatometer, the administrator's package is installed, the real collector restarts and the
+wizard turns active (12 s), with phone and dark screenshots reviewed. Fixed along the way: a
+timing-flaky short soak (faults are no longer injected when recovery cannot be observed; the
+short soak now runs 60 s, 3/3 passes).
+
+**Step 14 — certificates, catalog plan, replay design (done):** `labmon.server.tls` does a real
+handshake against `LABMON_TLS_CHECK_URL` (standard library, no new dependency). `doctor` and
+Diagnostics report expiry: warning under 30 days, critical when rejected. Tested against real TLS
+servers with certificates from a throwaway CA: valid, expiring, expired, wrong host, untrusted,
+no listener. Runbooks: `docs/operations/certificates.md` (inventory, renewal, CA change,
+incident) and `docs/operations/catalog-staging.md`, based on the portal's actual `tool_catalog()`
+and the suite's `ml-platform.env` (read from `kvmani/ml_server` and `kvmani/ml_server_deploy`
+on 2026-11-10; nothing changed there). ADR 0009 proposes operator-initiated replay of
+acknowledged records by identity range after a restore (not implemented).
+
+### Validation (latest, step 14)
 
 | Command | Result |
 | --- | --- |
-| `scripts/check.sh` | ruff + mypy --strict clean, **190 passed** (unit + integration, 61 s), Prettier/typecheck/build clean |
-| `scripts/check.sh --e2e` | e2e **4 passed** (recovery, browser incl. help, 45 s soak with 2 API kills, PITR) |
+| `scripts/check.sh --e2e` | ruff + mypy --strict clean, **209 passed** (unit + integration, 105 s), Prettier/typecheck/build clean, e2e **5 passed** (recovery, browser, commissioning UI, 60 s soak, PITR) |
 
 Note: running the full gate in parallel with a soak exhausted the container's memory (restart).
 Run soaks on their own.
@@ -184,18 +207,24 @@ run also passes (steady p95 1.009 s, recovery ≤ 30.7 s at 15 s resolution).
 - Nothing is staged or field-verified. The release rehearsal ran in a temporary root without
   real systemd, reboot or client-workstation TLS. The Windows installer has never run on Windows.
 - The longest soak recorded is 20 min (above), not 72 h.
-- There is no command to re-send acknowledged records after a database restore.
+- Applying a published revision needs an operator step: download the package, install it and
+  restart the collector. There is no pull-based configuration (ADR 0008).
+- Replay of acknowledged records after a restore is designed (ADR 0009), not implemented.
+- The portal catalog card is planned, not staged. It needs changes in `kvmani/ml_server` and
+  `kvmani/ml_server_deploy`, made by their owners.
 - DSC peak areas use a straight baseline and are labelled estimates.
 - The CI workflow has never been dispatched on GitHub; only local gate runs are recorded.
-- No scientist usability review yet.
+- No scientist usability review or technician commissioning trial with real people yet.
 
 ### Next actions (M3)
 
 1. Staging VM rehearsals (needs an authorized environment): Ubuntu install with real systemd,
-   reboot and TLS from a client; Windows 11 collector install, reboot without logon, rollback.
-2. 72 h soak on a representative host: `labmon-soak --hours 72 --restart-api-every 240`.
-3. Operator-initiated replay of acknowledged records after a restore (design + ADR first).
-4. Profile wizard / collector provisioning UI; scientist usability review.
+   reboot, TLS from a client and `LABMON_TLS_CHECK_URL`; Windows 11 collector install, reboot
+   without logon, rollback; the 72 h soak there.
+2. Implement ADR 0009 (ledger-gap detection, `labmon-collector replay`) and drill it with PITR.
+3. Scientist usability review and a technician commissioning trial; fix the findings.
+4. Portal and suite catalog changes with their owners (catalog-staging.md), then the staging
+   checks.
 
 ## Checkpoint 1 — First implementation tranche
 

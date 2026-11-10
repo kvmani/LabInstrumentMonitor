@@ -62,6 +62,12 @@ labmon-server restore-check /var/lib/labmon/backups/labmon-<stamp>.dump \
 Before relying on the system during multi-day furnace runs, add base backups with WAL
 archiving and rehearse point-in-time recovery: see [pitr.md](pitr.md) (SPECIFICATIONS §10).
 
+## 5a · Certificates and the portal link
+
+Certificate inventory, expiry monitoring (`LABMON_TLS_CHECK_URL`), renewal and incidents:
+[certificates.md](certificates.md). Linking the monitor from the ML Server portal is planned in
+[catalog-staging.md](catalog-staging.md) as separate portal and suite changes.
+
 ## 6 · Collector (instrument PC)
 
 Linux: install the same bundle, place `collector.toml` and the 0600 token under

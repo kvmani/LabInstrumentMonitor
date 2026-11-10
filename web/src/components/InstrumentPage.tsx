@@ -1126,6 +1126,14 @@ function SystemCard() {
             </dd>
           </>
         )}
+        <dt>HTTPS certificate</dt>
+        <dd data-testid="tls-status">
+          {d.tls ? (
+            <span className={d.tls.status === "ok" ? "" : "error"}>{d.tls.detail}</span>
+          ) : (
+            <span className="muted">not checked (LABMON_TLS_CHECK_URL not set)</span>
+          )}
+        </dd>
       </dl>
       <h3 style={{ margin: "12px 0 6px" }}>Service notes</h3>
       <FaultList faults={d.faults} empty="No service faults." />

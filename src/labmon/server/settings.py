@@ -35,6 +35,9 @@ class Settings:
     export_max_attempts: int = 3
     export_lease_s: float = 300.0
     backup_status_file: Path | None = None
+    # the public HTTPS URL clients use, checked by a real handshake (doctor, Diagnostics)
+    tls_check_url: str | None = None
+    tls_ca_file: Path | None = None  # site CA bundle; default: the system trust store
     login_attempts_per_15min: int = 5
 
     @property
@@ -61,5 +64,9 @@ class Settings:
             export_dir=Path(os.environ.get("LABMON_EXPORT_DIR", "var/exports")),
             backup_status_file=Path(os.environ["LABMON_BACKUP_STATUS_FILE"])
             if os.environ.get("LABMON_BACKUP_STATUS_FILE")
+            else None,
+            tls_check_url=os.environ.get("LABMON_TLS_CHECK_URL") or None,
+            tls_ca_file=Path(os.environ["LABMON_TLS_CA_FILE"])
+            if os.environ.get("LABMON_TLS_CA_FILE")
             else None,
         )

@@ -83,9 +83,9 @@ result, and switch only after a decision is recorded. An ordinary code rollback 
 
 **Data between the target and the stop is not re-sent automatically.** The collectors have
 already had those records acknowledged. The records stay in each collector's replay cache for
-`replay_retention_days` (default 7), but no command re-sends acknowledged records yet (open
-item). The restored history therefore shows a gap for that interval. Record it in the incident
-report and annotate the affected instruments.
+`replay_retention_days` (default 7), but no command re-sends acknowledged records yet
+(designed in ADR 0009, not implemented). The restored history therefore shows a gap for that
+interval. Record it in the incident report and annotate the affected instruments.
 
 ## 4 · Rehearse
 

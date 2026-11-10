@@ -16,6 +16,7 @@ from sqlalchemy import Connection, text
 from labmon.contracts.envelope import format_utc
 from labmon.server.backup import backup_status
 from labmon.server.settings import Settings
+from labmon.server.tls import cached_check
 
 CLOCK_OFFSET_WARN_S = 5.0
 BACKLOG_WARN_S = 60.0
@@ -240,8 +241,31 @@ def system_health(conn: Connection, settings: Settings, now: datetime) -> dict[s
                 "Check the backup timer and run `labmon-server backup` now.",
             )
         )
+    tls = None
+    if settings.tls_check_url:
+        tls = cached_check(settings.tls_check_url, settings.tls_ca_file, now)
+        if tls["status"] != "ok":
+            faults.append(
+                _f(
+                    "critical" if tls["status"] == "fail" else "warning",
+                    "tls_certificate",
+                    f"HTTPS certificate: {tls['detail']}.",
+                    "Renew or reinstall the site certificate (docs/operations/certificates.md). "
+                    "Collectors keep spooling until uploads succeed again.",
+                )
+            )
+    elif settings.environment == "production":
+        faults.append(
+            _f(
+                "warning",
+                "tls_not_monitored",
+                "Certificate expiry is not monitored (LABMON_TLS_CHECK_URL is not set).",
+                "Set LABMON_TLS_CHECK_URL to the URL clients use, e.g. https://monitor.lab.example.",
+            )
+        )
     return {
         "server_time": format_utc(now),
+        "tls": tls,
         "rollup_queue": {
             "minutes": int(q[0]),
             "oldest_marked_at": None if oldest is None else format_utc(oldest),

@@ -24,6 +24,7 @@ from labmon.server import migrate
 from labmon.server.backup import backup_status
 from labmon.server.db import make_engine
 from labmon.server.settings import Settings
+from labmon.server.tls import check_tls
 
 MIN_FREE_BYTES = 2 * 2**30
 
@@ -119,6 +120,16 @@ def run_checks(settings: Settings) -> list[Check]:
         else f"{settings.export_dir} is inside the release {release_root}",
         warn_only=True,
     )
+    if settings.tls_check_url:
+        tls = check_tls(settings.tls_check_url, settings.tls_ca_file, datetime.now(UTC))
+        out.append(Check("tls certificate", str(tls["status"]), str(tls["detail"])))
+    else:
+        add(
+            "tls certificate",
+            False,
+            "LABMON_TLS_CHECK_URL not set: certificate expiry is not checked",
+            warn_only=True,
+        )
     info = backup_status(settings.backup_status_file, datetime.now(UTC))
     if info is None:
         add("backup freshness", False, "LABMON_BACKUP_STATUS_FILE not set", warn_only=True)
